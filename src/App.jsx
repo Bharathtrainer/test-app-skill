@@ -32,6 +32,11 @@ const XCircleIcon = ({ className }) => (
     </svg>
 );
 
+const TrophyIcon = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+         <path fillRule="evenodd" d="M15.97 2.47a.75.75 0 011.06 0l4.5 4.5a.75.75 0 01-1.06 1.06L16 3.56V13.5a3 3 0 01-3 3h-1.5a.75.75 0 000 1.5H13a4.5 4.5 0 004.5-4.5V8.06l3.22 3.22a.75.75 0 11-1.06 1.06l-4.5-4.5a.75.75 0 010-1.06zm-7.94 0a.75.75 0 010 1.06L3.56 8.06V18a3 3 0 003 3h1.5a.75.75 0 010 1.5H6.56a4.5 4.5 0 01-4.5-4.5V8.06l-3.22 3.22a.75.75 0 01-1.06-1.06l4.5-4.5a.75.75 0 011.06 0z" clipRule="evenodd" />
+    </svg>
+);
 
 // --- Firebase Configuration & Initialization ---
 const firebaseConfig = {
@@ -608,12 +613,34 @@ const Quiz = ({ db, track, level, onFinish }) => {
             e.returnValue = 'Are you sure you want to leave? Your quiz will be submitted.';
         };
 
+        const handleDevTools = (e) => {
+            if (e.keyCode === 123) { // F12
+                handleFinishQuiz(true);
+            }
+        };
+
+        const handleFullscreenChange = () => {
+            if (!document.fullscreenElement) {
+                handleFinishQuiz(true);
+            }
+        };
+        
         document.addEventListener("visibilitychange", handleVisibilityChange);
         window.addEventListener('beforeunload', handleBeforeUnload);
+        document.addEventListener('keydown', handleDevTools);
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('copy', e => e.preventDefault());
+        document.addEventListener('paste', e => e.preventDefault());
 
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('keydown', handleDevTools);
+            document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            document.removeEventListener('contextmenu', e => e.preventDefault());
+            document.removeEventListener('copy', e => e.preventDefault());
+            document.removeEventListener('paste', e => e.preventDefault());
         };
     }, [handleFinishQuiz]);
 
@@ -862,7 +889,8 @@ const AppHeader = ({ user, onSignOut, onNavigate, isAdmin }) => (
         <div className="max-w-7xl mx-auto flex justify-between items-center">
             <h1 className="text-xl font-bold text-white cursor-pointer" onClick={() => onNavigate('home')}>Skill Index</h1>
             <div className="flex items-center gap-4">
-                {!isAdmin && <button onClick={() => onNavigate('history')} className="text-sm text-slate-300 hover:text-white">Quiz History</button>}
+                {!isAdmin && <button onClick={() => onNavigate('profile')} className="text-sm text-slate-300 hover:text-white">My Profile</button>}
+                {!isAdmin && <button onClick={() => onNavigate('leaderboard')} className="text-sm text-slate-300 hover:text-white">Leaderboard</button>}
                 {isAdmin && <button onClick={() => onNavigate('analytics')} className="text-sm text-slate-300 hover:text-white">Analytics</button>}
                 <span className="text-sm text-slate-300">{user.email}</span>
                 <button onClick={onSignOut} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
@@ -943,22 +971,24 @@ const QuizHistory = ({ userId }) => {
 const AnalyticsDashboard = () => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [allProgress, setAllProgress] = useState([]);
 
     const calculateStats = useCallback(async () => {
         setLoading(true);
         const usersCollectionRef = collection(db, 'artifacts', appId, 'users');
         const usersSnapshot = await getDocs(usersCollectionRef);
         
-        let allProgress = [];
+        let progressData = [];
         for (const userDoc of usersSnapshot.docs) {
             const progressCollectionRef = collection(db, 'artifacts', appId, 'users', userDoc.id, 'progress');
             const progressSnapshot = await getDocs(progressCollectionRef);
             progressSnapshot.forEach(doc => {
-                allProgress.push({ userId: userDoc.id, ...doc.data() });
+                progressData.push({ userId: userDoc.id, ...doc.data() });
             });
         }
+        setAllProgress(progressData);
 
-        if (allProgress.length === 0) {
+        if (progressData.length === 0) {
             setStats({
                 totalQuizzes: 0, averageScore: 0, passRate: 0,
                 popularTracks: {}, topPerformers: []
@@ -967,18 +997,18 @@ const AnalyticsDashboard = () => {
             return;
         }
 
-        const totalQuizzes = allProgress.length;
-        const totalPercentage = allProgress.reduce((sum, p) => sum + p.percentage, 0);
+        const totalQuizzes = progressData.length;
+        const totalPercentage = progressData.reduce((sum, p) => sum + p.percentage, 0);
         const averageScore = totalPercentage / totalQuizzes;
-        const passedQuizzes = allProgress.filter(p => p.percentage >= 60).length;
+        const passedQuizzes = progressData.filter(p => p.percentage >= 60).length;
         const passRate = (passedQuizzes / totalQuizzes) * 100;
 
-        const popularTracks = allProgress.reduce((acc, p) => {
+        const popularTracks = progressData.reduce((acc, p) => {
             acc[p.track] = (acc[p.track] || 0) + 1;
             return acc;
         }, {});
 
-        const userScores = allProgress.reduce((acc, p) => {
+        const userScores = progressData.reduce((acc, p) => {
             if (!acc[p.userId]) {
                 acc[p.userId] = { totalScore: 0, count: 0, email: 'N/A' };
             }
@@ -1012,7 +1042,29 @@ const AnalyticsDashboard = () => {
     }, [calculateStats]);
 
     const exportToCsv = () => {
-        alert("Data export functionality would be implemented here.");
+        if (allProgress.length === 0) {
+            alert("No data to export.");
+            return;
+        }
+        const headers = ['userId', 'track', 'level', 'score', 'totalQuestions', 'percentage', 'completedAt'];
+        const csvContent = "data:text/csv;charset=utf-8," 
+            + headers.join(",") + "\n" 
+            + allProgress.map(row => 
+                headers.map(header => {
+                    if (header === 'completedAt') {
+                        return new Date(row[header].seconds * 1000).toISOString();
+                    }
+                    return row[header];
+                }).join(",")
+            ).join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "quiz_history.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     if (loading) return <div className="text-white text-center p-10">Loading Analytics...</div>;
@@ -1101,6 +1153,143 @@ const ConsentModal = ({ onConfirm, onCancel }) => (
         </div>
     </div>
 );
+
+const UserProfile = ({ userId }) => {
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchHistory = async () => {
+            if (!userId) return;
+            setLoading(true);
+            const historyCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'progress');
+            const q = query(historyCollectionRef);
+            const querySnapshot = await getDocs(q);
+            const historyData = querySnapshot.docs.map(doc => doc.data());
+            setHistory(historyData);
+            setLoading(false);
+        };
+        fetchHistory();
+    }, [userId]);
+
+    const getBadges = () => {
+        const badges = [];
+        if (history.length >= 5) {
+            badges.push({ name: 'Quiz Veteran', description: 'Completed 5 quizzes.' });
+        }
+        if (history.some(h => h.percentage === 100)) {
+            badges.push({ name: 'Perfectionist', description: 'Achieved a perfect score.' });
+        }
+        const masteredTracks = ['javascript', 'python', 'sql', 'react', 'devops'].filter(track => 
+            history.filter(h => h.track === track && h.percentage >= 80).length >= 3
+        );
+        masteredTracks.forEach(track => {
+            badges.push({ name: `${track.charAt(0).toUpperCase() + track.slice(1)} Master`, description: `Mastered the ${track} track.` });
+        });
+        return badges;
+    };
+
+    if (loading) return <div className="text-white text-center p-10">Loading Profile...</div>;
+
+    const badges = getBadges();
+
+    return (
+        <div className="w-full max-w-4xl mx-auto p-4 md:p-8 text-white">
+            <h1 className="text-4xl md:text-5xl font-bold mb-8 text-center">My Profile & Achievements</h1>
+            <div className="bg-slate-800 rounded-xl shadow-2xl p-8">
+                <h2 className="text-2xl font-semibold mb-6">My Badges</h2>
+                {badges.length > 0 ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        {badges.map(badge => (
+                            <div key={badge.name} className="flex flex-col items-center text-center p-4 bg-slate-700/50 rounded-lg">
+                                <TrophyIcon className="w-16 h-16 text-yellow-400 mb-2" />
+                                <h3 className="font-bold">{badge.name}</h3>
+                                <p className="text-xs text-slate-400">{badge.description}</p>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-slate-400">You haven't earned any badges yet. Keep taking quizzes to unlock them!</p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const Leaderboard = () => {
+    const [leaderboard, setLeaderboard] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchLeaderboardData = async () => {
+            setLoading(true);
+            const usersCollectionRef = collection(db, 'artifacts', appId, 'users');
+            const usersSnapshot = await getDocs(usersCollectionRef);
+            
+            let allProgress = [];
+            for (const userDoc of usersSnapshot.docs) {
+                const progressCollectionRef = collection(db, 'artifacts', appId, 'users', userDoc.id, 'progress');
+                const progressSnapshot = await getDocs(progressCollectionRef);
+                progressSnapshot.forEach(doc => {
+                    allProgress.push({ userId: userDoc.id, ...doc.data() });
+                });
+            }
+
+            const userScores = allProgress.reduce((acc, p) => {
+                if (!acc[p.userId]) {
+                    acc[p.userId] = { totalScore: 0, count: 0, email: 'user' + p.userId.substring(0,4) };
+                }
+                acc[p.userId].totalScore += p.percentage;
+                acc[p.userId].count += 1;
+                return acc;
+            }, {});
+
+            const rankedUsers = Object.entries(userScores)
+                .map(([userId, data]) => ({
+                    userId,
+                    email: data.email,
+                    average: data.totalScore / data.count,
+                    quizzesTaken: data.count
+                }))
+                .sort((a, b) => b.average - a.average);
+
+            setLeaderboard(rankedUsers);
+            setLoading(false);
+        };
+
+        fetchLeaderboardData();
+    }, []);
+
+    if (loading) return <div className="text-white text-center p-10">Loading Leaderboard...</div>;
+
+    return (
+        <div className="w-full max-w-4xl mx-auto p-4 md:p-8">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-8 text-center">Leaderboard</h1>
+            <div className="bg-slate-800 rounded-xl shadow-2xl overflow-hidden">
+                <table className="min-w-full text-white">
+                    <thead className="bg-slate-700">
+                        <tr>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Rank</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">User</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Quizzes Taken</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Average Score</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700">
+                        {leaderboard.map((user, index) => (
+                            <tr key={user.userId} className={index < 3 ? 'bg-yellow-500/10' : ''}>
+                                <td className="py-4 px-4 font-bold">{index + 1}</td>
+                                <td className="py-4 px-4">{user.email}</td>
+                                <td className="py-4 px-4">{user.quizzesTaken}</td>
+                                <td className="py-4 px-4 font-bold">{user.average.toFixed(2)}%</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
 
 
 export default function App() {
@@ -1194,6 +1383,10 @@ export default function App() {
                 return <Results db={db} userId={user.uid} track={quizConfig.track} level={quizConfig.level} {...quizResult} onRestart={handleRestart} />;
             case 'history':
                 return <QuizHistory userId={user.uid} />;
+            case 'profile':
+                return <UserProfile userId={user.uid} />;
+            case 'leaderboard':
+                return <Leaderboard />;
             case 'home':
             default:
                 return <TrackSelection onStartTest={handleStartTestRequest} userId={user.uid} />;
