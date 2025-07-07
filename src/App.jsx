@@ -14,9 +14,9 @@ import { getAnalytics } from "firebase/analytics";
 // Replace this with the email address you want to be the admin
 const ADMIN_EMAIL = "admin@test.com";
 
-// --- NEW: Timer Configuration ---
-const TOTAL_QUIZ_TIME = 600; // 10 minutes in seconds
-const TIME_PER_QUESTION = 30; // 30 seconds per question
+// --- Default Timer Configuration (fallback) ---
+const DEFAULT_TOTAL_QUIZ_TIME = 600; // 10 minutes in seconds
+const DEFAULT_TIME_PER_QUESTION = 30; // 30 seconds per question
 
 
 // --- Helper: Icon Components ---
@@ -29,12 +29,6 @@ const CheckCircleIcon = ({ className }) => (
 const XCircleIcon = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
         <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z" clipRule="evenodd" />
-    </svg>
-);
-
-const SparklesIcon = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.572L16.5 21.75l-.398-1.178a3.375 3.375 0 00-2.456-2.456L12.5 18l1.178-.398a3.375 3.375 0 002.456-2.456L16.5 14.25l.398 1.178a3.375 3.375 0 002.456 2.456L20.5 18l-1.178.398a3.375 3.375 0 00-2.456 2.456z" />
     </svg>
 );
 
@@ -140,11 +134,16 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
     const [fileLevel, setFileLevel] = useState('beginner');
     const [file, setFile] = useState(null);
 
+    // State for timer config
+    const [totalTime, setTotalTime] = useState(DEFAULT_TOTAL_QUIZ_TIME);
+    const [questionTime, setQuestionTime] = useState(DEFAULT_TIME_PER_QUESTION);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [adminMessage, setAdminMessage] = useState('');
     const [questionCounts, setQuestionCounts] = useState({});
 
-    const fetchQuestionCounts = useCallback(async () => {
+    const fetchAdminData = useCallback(async () => {
+        // Fetch question counts
         const counts = {};
         const quizzesCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'quizzes');
         const querySnapshot = await getDocs(quizzesCollectionRef);
@@ -157,16 +156,42 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             counts[track][level] = count;
         });
         setQuestionCounts(counts);
+
+        // Fetch timer config
+        const timerConfigRef = doc(db, 'settings', 'timers');
+        const timerConfigSnap = await getDoc(timerConfigRef);
+        if (timerConfigSnap.exists()) {
+            setTotalTime(timerConfigSnap.data().totalQuizTime);
+            setQuestionTime(timerConfigSnap.data().timePerQuestion);
+        }
     }, []);
 
     useEffect(() => {
-        fetchQuestionCounts();
-    }, [fetchQuestionCounts]);
+        fetchAdminData();
+    }, [fetchAdminData]);
 
     const handleOptionChange = (index, value) => {
         const newOptions = [...options];
         newOptions[index] = value;
         setOptions(newOptions);
+    };
+
+    const handleSaveTimers = async () => {
+        setIsSubmitting(true);
+        setAdminMessage('');
+        try {
+            const docRef = doc(db, 'settings', 'timers');
+            await setDoc(docRef, {
+                totalQuizTime: Number(totalTime),
+                timePerQuestion: Number(questionTime)
+            });
+            setAdminMessage({ type: 'success', text: 'Timer settings saved!' });
+        } catch (error) {
+            setAdminMessage({ type: 'error', text: 'Failed to save timer settings.' });
+            console.error("Error saving timers:", error);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleCreateQuiz = async (e) => {
@@ -176,7 +201,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             return;
         }
         setIsSubmitting(true);
-        setAdminMessage({ type: '', text: '' });
+        setAdminMessage('');
 
         const quizId = `${manualTrack.toLowerCase()}_${manualLevel.toLowerCase()}`;
         const newQuestion = { questionText, options, correctAnswer };
@@ -197,7 +222,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             setQuestionText('');
             setOptions(['', '', '', '']);
             setCorrectAnswer('');
-            fetchQuestionCounts(); // Refresh counts
+            fetchAdminData(); // Refresh counts
 
         } catch (error) {
             console.error("Error creating quiz:", error);
@@ -211,7 +236,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         const selectedFile = e.target.files[0];
         if (selectedFile && (selectedFile.type === "application/json" || selectedFile.type === "text/csv")) {
             setFile(selectedFile);
-            setAdminMessage({ type: '', text: '' });
+            setAdminMessage('');
         } else {
             setFile(null);
             setAdminMessage({ type: 'error', text: 'Please upload a valid JSON or CSV file.' });
@@ -265,7 +290,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
 
                 setAdminMessage({ type: 'success', text: `Successfully uploaded ${newQuestions.length} questions to ${fileTrack} - ${fileLevel}!` });
                 setFile(null);
-                fetchQuestionCounts(); // Refresh counts
+                fetchAdminData();
 
             } catch (error) {
                 console.error("Error processing file:", error);
@@ -288,7 +313,6 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         <div className="w-full max-w-4xl mx-auto p-4 my-8 bg-slate-800 rounded-xl shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Admin Panel</h2>
             
-            {/* Question Bank Status */}
             <div className="mb-8 p-4 bg-slate-700/50 rounded-lg">
                 <h3 className="text-xl font-semibold text-white mb-4">Question Bank Status</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-white">
@@ -305,8 +329,24 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                 </div>
             </div>
 
-            {/* File Upload Form */}
-            <div className="space-y-4 text-white mb-8">
+            <div className="mb-8 pt-4 border-t border-slate-700">
+                <h3 className="text-xl font-semibold text-white mb-4">Configure Timers (in seconds)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300">Total Quiz Time</label>
+                        <input type="number" value={totalTime} onChange={(e) => setTotalTime(e.target.value)} className="mt-1 block w-full shadow-sm sm:text-sm border-slate-700 bg-slate-900 rounded-md text-white" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300">Time Per Question</label>
+                        <input type="number" value={questionTime} onChange={(e) => setQuestionTime(e.target.value)} className="mt-1 block w-full shadow-sm sm:text-sm border-slate-700 bg-slate-900 rounded-md text-white" />
+                    </div>
+                </div>
+                <button onClick={handleSaveTimers} disabled={isSubmitting} className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-slate-500">
+                    {isSubmitting ? 'Saving...' : 'Save Timer Settings'}
+                </button>
+            </div>
+
+            <div className="space-y-4 text-white mb-8 pt-8 border-t border-slate-700">
                  <h3 className="text-xl font-semibold">Upload Quiz File (CSV/JSON)</h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -349,7 +389,6 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                 </div>
             </div>
 
-            {/* Create Single Quiz Form */}
             <form onSubmit={handleCreateQuiz} className="space-y-4 text-white pt-8 border-t border-slate-700">
                 <h3 className="text-xl font-semibold">Create Single Quiz Question</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -459,8 +498,12 @@ const Quiz = ({ db, track, level, onFinish }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [timeoutId, setTimeoutId] = useState(null);
-    const [totalTime, setTotalTime] = useState(TOTAL_QUIZ_TIME);
-    const [questionTime, setQuestionTime] = useState(TIME_PER_QUESTION);
+    
+    const [timerConfig, setTimerConfig] = useState({ total: DEFAULT_TOTAL_QUIZ_TIME, perQuestion: DEFAULT_TIME_PER_QUESTION });
+    const [totalTime, setTotalTime] = useState(DEFAULT_TOTAL_QUIZ_TIME);
+    const [questionTime, setQuestionTime] = useState(DEFAULT_TIME_PER_QUESTION);
+    const [isPaused, setIsPaused] = useState(false);
+    const [isTimeWarning, setIsTimeWarning] = useState(false);
 
     const handleFinishQuiz = useCallback(() => {
         let score = 0;
@@ -477,17 +520,25 @@ const Quiz = ({ db, track, level, onFinish }) => {
             clearTimeout(timeoutId);
             setTimeoutId(null);
         }
-
+        setIsTimeWarning(false);
         if (currentQuestionIndex < questions.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
-            setQuestionTime(TIME_PER_QUESTION);
+            setQuestionTime(timerConfig.perQuestion);
         } else {
             handleFinishQuiz();
         }
-    }, [currentQuestionIndex, questions.length, handleFinishQuiz, timeoutId]);
+    }, [currentQuestionIndex, questions.length, handleFinishQuiz, timeoutId, timerConfig.perQuestion]);
 
     useEffect(() => {
-        if(questions.length === 0) return; // Don't start timers until questions are loaded
+        const handleVisibilityChange = () => {
+            setIsPaused(document.hidden);
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }, []);
+
+    useEffect(() => {
+        if(questions.length === 0 || isPaused) return;
 
         const timer = setInterval(() => {
             setTotalTime(prev => {
@@ -500,24 +551,36 @@ const Quiz = ({ db, track, level, onFinish }) => {
             });
 
             setQuestionTime(prev => {
+                if (prev <= 6) setIsTimeWarning(true);
                 if (prev <= 1) {
                     handleNext();
-                    return TIME_PER_QUESTION;
+                    return timerConfig.perQuestion;
                 }
                 return prev - 1;
             });
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [handleFinishQuiz, handleNext, questions]);
+    }, [questions, isPaused, handleFinishQuiz, handleNext, timerConfig.perQuestion]);
 
     useEffect(() => {
-        const fetchQuestions = async () => {
+        const fetchQuizData = async () => {
             setIsLoading(true);
             setError(null);
-            const quizId = `${track.toLowerCase()}_${level.toLowerCase()}`;
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
+            
             try {
+                const timerConfigRef = doc(db, 'settings', 'timers');
+                const timerConfigSnap = await getDoc(timerConfigRef);
+                const newTimerConfig = timerConfigSnap.exists()
+                    ? { total: timerConfigSnap.data().totalQuizTime, perQuestion: timerConfigSnap.data().timePerQuestion }
+                    : { total: DEFAULT_TOTAL_QUIZ_TIME, perQuestion: DEFAULT_TIME_PER_QUESTION };
+                
+                setTimerConfig(newTimerConfig);
+                setTotalTime(newTimerConfig.total);
+                setQuestionTime(newTimerConfig.perQuestion);
+
+                const quizId = `${track.toLowerCase()}_${level.toLowerCase()}`;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists() && docSnap.data().questions.length > 0) {
                     setQuestions(docSnap.data().questions);
@@ -525,12 +588,12 @@ const Quiz = ({ db, track, level, onFinish }) => {
                     setError(`No quiz found for ${track} - ${level}. Please seed the database or ask an admin to add questions.`);
                 }
             } catch (err) {
-                console.error("Error fetching quiz:", err);
-                setError("Failed to load the quiz. Please check your connection and try again.");
+                console.error("Error fetching data:", err);
+                setError("Failed to load quiz data. Please check your connection and try again.");
             }
             setIsLoading(false);
         };
-        fetchQuestions();
+        fetchQuizData();
     }, [db, track, level]);
 
     const handleAnswerSelect = (option) => {
@@ -558,19 +621,46 @@ const Quiz = ({ db, track, level, onFinish }) => {
 
     const currentQuestion = questions[currentQuestionIndex];
     const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
+    
+    const totalTimePercentage = (totalTime / timerConfig.total) * 100;
+    const questionTimePercentage = (questionTime / timerConfig.perQuestion) * 100;
+
+    const getProgressBarColor = (percentage) => {
+        if (percentage > 50) return 'bg-green-500';
+        if (percentage > 25) return 'bg-yellow-500';
+        return 'bg-red-500';
+    };
 
     return (
         <div className="w-full max-w-2xl mx-auto p-4 md:p-8">
             <div className="bg-slate-800 p-6 md:p-8 rounded-xl shadow-2xl">
                 <div className="mb-6">
-                     <div className="flex justify-between items-center mb-4 text-slate-300">
-                        <div className="text-lg">
-                            Total Time: <span className="font-bold text-white">{Math.floor(totalTime / 60)}:{('0' + totalTime % 60).slice(-2)}</span>
-                        </div>
-                         <div className="text-lg">
-                            Question Time: <span className="font-bold text-white">{questionTime}s</span>
+                     <div className="flex justify-between items-center mb-1 text-slate-300">
+                        <div className="text-sm">Total Time Left</div>
+                         <div className="text-sm font-bold text-white">
+                            {Math.floor(totalTime / 60)}:{('0' + totalTime % 60).slice(-2)}
                         </div>
                     </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2.5 mb-4">
+                        <div 
+                            className={`h-2.5 rounded-full transition-all duration-500 ease-linear ${getProgressBarColor(totalTimePercentage)}`}
+                            style={{ width: `${totalTimePercentage}%` }}
+                        ></div>
+                    </div>
+
+                     <div className="flex justify-between items-center mb-1 text-slate-300">
+                        <div className="text-sm">Time for this Question</div>
+                        <div className={`text-sm font-bold ${isTimeWarning ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                            {questionTime}s
+                        </div>
+                    </div>
+                    <div className="w-full bg-slate-700 rounded-full h-2.5 mb-4">
+                        <div 
+                             className={`h-2.5 rounded-full transition-all duration-500 ease-linear ${getProgressBarColor(questionTimePercentage)} ${isTimeWarning ? 'animate-pulse' : ''}`}
+                             style={{ width: `${questionTimePercentage}%` }}
+                        ></div>
+                    </div>
+
                     <div className="flex justify-between items-center mb-2 text-slate-400">
                         <p>Question {currentQuestionIndex + 1} of {questions.length}</p>
                         <p className="font-semibold capitalize">{track} - {level}</p>
@@ -610,9 +700,6 @@ const Quiz = ({ db, track, level, onFinish }) => {
 
 const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, questions, selectedAnswers }) => {
     const percentage = Math.round((score / totalQuestions) * 100);
-    const [studyGuide, setStudyGuide] = useState('');
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [generationError, setGenerationError] = useState('');
     const [showReview, setShowReview] = useState(false);
 
     useEffect(() => {
@@ -628,36 +715,6 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, q
         saveResult();
     }, [db, userId, track, level, score, totalQuestions, percentage]);
     
-    const handleGenerateStudyGuide = async () => {
-        setIsGenerating(true);
-        setStudyGuide('');
-        setGenerationError('');
-
-        const prompt = `Create a concise study guide for a ${level}-level learner in ${track}. The user just completed a quiz and needs a focused guide to help them improve. Include the following sections: 1. Key Concepts: A bulleted list of the most important topics for this level. 2. Code Examples: Simple, clear code snippets demonstrating 2-3 of the key concepts. 3. Study Tips: Actionable advice on how to practice and improve. Format the output clearly with headings.`;
-
-        try {
-            const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
-            const payload = { contents: chatHistory };
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-            
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-            const result = await response.json();
-            
-            if (result.candidates?.[0]?.content?.parts?.[0]) {
-                setStudyGuide(result.candidates[0].content.parts[0].text);
-            } else {
-                throw new Error("Invalid response structure from API.");
-            }
-        } catch (error) {
-            console.error("Error generating study guide:", error);
-            setGenerationError("Sorry, we couldn't generate the study guide at this time. Please try again later.");
-        } finally {
-            setIsGenerating(false);
-        }
-    };
-
     let feedback = {
         title: "Great Effort!",
         message: "Keep practicing to master this skill.",
@@ -690,9 +747,6 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, q
                     <button onClick={() => setShowReview(!showReview)} className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">
                         {showReview ? 'Hide Review' : 'Review Answers'}
                     </button>
-                    <button onClick={handleGenerateStudyGuide} disabled={isGenerating} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-slate-600 disabled:cursor-not-allowed">
-                        {isGenerating ? ( <><div className="w-5 h-5 border-t-2 border-r-2 border-white rounded-full animate-spin"></div><span>Generating...</span></> ) : ( <><SparklesIcon className="w-6 h-6" /><span>Generate Study Guide</span></> )}
-                    </button>
                     <button onClick={onRestart} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">
                         Back to Home
                     </button>
@@ -713,15 +767,6 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, q
                             </div>
                         );
                     })}
-                </div>
-            )}
-
-            {generationError && ( <div className="mt-6 w-full max-w-2xl mx-auto p-4 bg-red-900/50 text-red-300 rounded-lg"><p>{generationError}</p></div> )}
-            {studyGuide && (
-                <div className="mt-6 w-full max-w-2xl mx-auto p-6 bg-slate-800 rounded-xl shadow-2xl text-left">
-                    <h2 className="text-2xl font-bold text-white mb-4">✨ Your Personalized Study Guide</h2>
-                    <div className="prose prose-invert prose-sm md:prose-base max-w-none text-slate-300 whitespace-pre-wrap font-mono">{studyGuide}</div>
-                    <button onClick={() => setStudyGuide('')} className="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">Close Guide</button>
                 </div>
             )}
         </div>
