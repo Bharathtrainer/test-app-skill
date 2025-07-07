@@ -58,15 +58,9 @@ const appId = firebaseConfig.appId;
 
 // --- Sample Quiz Data ---
 const sampleQuizzes = {
-    'javascript_beginner': { questions: [ { questionText: 'What does "DOM" stand for?', options: ['Document Object Model', 'Data Object Model', 'Desktop Oriented Markup', 'Digital Ordinance Map'], correctAnswer: 'Document Object Model' }, { questionText: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const' }, { questionText: 'What is `typeof null`?', options: ['"null"', '"undefined"', '"object"', '"string"'], correctAnswer: '"object"' }, { questionText: 'Which method adds an element to the end of an array?', options: ['.push()', '.pop()', '.shift()', '.unshift()'], correctAnswer: '.push()' }, { questionText: 'How do you write a single-line comment in JavaScript?', options: ['// comment', '/* comment */', '<!-- comment -->', '# comment'], correctAnswer: '// comment' }, ] },
-    'javascript_intermediate': { questions: [ { questionText: 'What is the purpose of the `...` spread operator?', options: ['To comment out code', 'To expand an iterable into individual elements', 'To declare a private variable', 'To multiply numbers'], correctAnswer: 'To expand an iterable into individual elements' }, { questionText: 'Which method is used to create a new array with all elements that pass a test?', options: ['.forEach()', '.map()', '.filter()', '.reduce()'], correctAnswer: '.filter()' }, { questionText: 'What does `async/await` help with?', options: ['Styling components', 'Synchronous code execution', 'Handling Promises more cleanly', 'Creating loops'], correctAnswer: 'Handling Promises more cleanly' }, { questionText: 'What is object destructuring?', options: ['Deleting an object', 'A way to extract properties from an object into variables', 'Combining two objects', 'A type of error'], correctAnswer: 'A way to extract properties from an object into variables' }, { questionText: 'A Promise in JavaScript can be in one of how many states?', options: ['2 (Resolved, Rejected)', '3 (Pending, Fulfilled, Rejected)', '1 (Pending)', '4 (Pending, Fulfilled, Rejected, Canceled)'], correctAnswer: '3 (Pending, Fulfilled, Rejected)' }, ] },
-    'javascript_expert': { questions: [ { questionText: 'What is a closure in JavaScript?', options: ['A way to lock a variable', 'A function bundled with its lexical environment', 'A syntax error', 'An outdated event handler'], correctAnswer: 'A function bundled with its lexical environment' }, { questionText: 'What does the `this` keyword refer to in an arrow function?', options: ['The global object', 'The object that called the function', 'The enclosing lexical context\'s `this`', 'It is always `undefined`'], correctAnswer: 'The enclosing lexical context\'s `this`' }, { questionText: 'What is the main purpose of the Event Loop?', options: ['To execute code line by line', 'To handle errors', 'To process callbacks from the queue when the call stack is empty', 'To manage memory allocation'], correctAnswer: 'To process callbacks from the queue when the call stack is empty' }, { questionText: 'How does prototypal inheritance work?', options: ['Objects inherit directly from other classes', 'Objects inherit directly from other objects', 'It is a way to create private properties', 'It only applies to functions'], correctAnswer: 'Objects inherit directly from other objects' }, { questionText: 'What is the difference between `==` and `===`?', options: ['No difference, they are interchangeable', '`==` compares value, `===` compares value and type', '`===` compares value, `==` compares value and type', '`===` is for assignment, `==` is for comparison'], correctAnswer: '`==` compares value, `===` compares value and type' }, ] },
-    'python_beginner': { questions: [ { questionText: 'What is the correct file extension for Python files?', options: ['.pyth', '.pt', '.py', '.python'], correctAnswer: '.py' }, { questionText: 'How do you create a function in Python?', options: ['def myFunction():', 'function myFunction():', 'create myFunction():', 'function:myFunction()'], correctAnswer: 'def myFunction():' }, { questionText: 'Which data type is used to store a sequence of characters?', options: ['str', 'char', 'string', 'text'], correctAnswer: 'str' }, { questionText: 'What is the output of `print(2 ** 3)`?', options: ['6', '8', '9', '5'], correctAnswer: '8' }, { questionText: 'Which keyword is used to exit a loop?', options: ['exit', 'quit', 'break', 'stop'], correctAnswer: 'break' }, ] },
-    'python_intermediate': { questions: [ { questionText: 'What is a list comprehension?', options: ['A way to understand lists', 'A compact way to create lists', 'A type of list error', 'A function to measure list length'], correctAnswer: 'A compact way to create lists' }, { questionText: 'What does a decorator do in Python?', options: ['Adds styling to output', 'A function that modifies another function', 'Deletes a function', 'A type of variable'], correctAnswer: 'A function that modifies another function' }, { questionText: 'What is the purpose of the `self` keyword in a class method?', options: ['It refers to the parent class', 'It is a global variable', 'It refers to the instance of the class', 'It is optional and has no purpose'], correctAnswer: 'It refers to the instance of the class' }, { questionText: 'How do you open a file named "data.txt" for writing in Python?', options: ['open("data.txt", "r")', 'open("data.txt")', 'open("data.txt", "w")', 'open.file("data.txt", "w")'], correctAnswer: 'open("data.txt", "w")' }, { questionText: 'What is a lambda function?', options: ['A multi-line function', 'A named function', 'A small anonymous function', 'A function that can only be used once'], correctAnswer: 'A small anonymous function' }, ] },
-    'python_expert': { questions: [ { questionText: 'What is the primary use of the `yield` keyword?', options: ['To end a function', 'To create a generator', 'To return multiple values at once', 'To declare a global variable'], correctAnswer: 'To create a generator' }, { questionText: 'What are `*args` and `**kwargs` used for in function definitions?', options: ['For pointer arithmetic', 'To pass a variable number of arguments', 'To define required arguments', 'To import modules'], correctAnswer: 'To pass a variable number of arguments' }, { questionText: 'What is a metaclass in Python?', options: ['A class for storing metadata', 'A class that is an instance of another class', 'A class that creates classes', 'A function that behaves like a class'], correctAnswer: 'A class that creates classes' }, { questionText: 'What is the Global Interpreter Lock (GIL) in CPython?', options: ['A security feature', 'A mutex that allows only one thread to execute Python bytecode at a time', 'A tool for debugging', 'A way to lock global variables'], correctAnswer: 'A mutex that allows only one thread to execute Python bytecode at a time' }, { questionText: 'How do you create a context manager in Python?', options: ['Using a decorator', 'Using the `with` statement and a class with `__enter__` and `__exit__` methods', 'Using a lambda function', 'It is a built-in data type'], correctAnswer: 'Using the `with` statement and a class with `__enter__` and `__exit__` methods' }, ] },
-    'sql_beginner': { questions: [ { questionText: 'What does SQL stand for?', options: ['Structured Query Language', 'Strong Question Language', 'Simple Query Lexicon', 'Scripted Query Language'], correctAnswer: 'Structured Query Language' }, { questionText: 'Which SQL statement is used to extract data from a database?', options: ['GET', 'OPEN', 'EXTRACT', 'SELECT'], correctAnswer: 'SELECT' }, { questionText: 'Which SQL clause is used to filter records?', options: ['FILTER BY', 'WHERE', 'SEARCH', 'CONDITION'], correctAnswer: 'WHERE' }, { questionText: 'Which SQL keyword is used to sort the result-set?', options: ['SORT BY', 'ORDER BY', 'ARRANGE', 'SORT'], correctAnswer: 'ORDER BY' }, { questionText: 'How can you insert a new record into the "Customers" table?', options: ['ADD INTO Customers...', 'INSERT INTO Customers...', 'NEW Customers...', 'INSERT Customers...'], correctAnswer: 'INSERT INTO Customers...' }, ] },
-    'sql_intermediate': { questions: [ { questionText: 'Which type of JOIN returns all records from the left table, and the matched records from the right table?', options: ['INNER JOIN', 'RIGHT JOIN', 'FULL JOIN', 'LEFT JOIN'], correctAnswer: 'LEFT JOIN' }, { questionText: 'What is the purpose of the `GROUP BY` clause?', options: ['To sort the result set', 'To group rows that have the same values into summary rows', 'To filter records', 'To join tables'], correctAnswer: 'To group rows that have the same values into summary rows' }, { questionText: 'Which aggregate function returns the number of rows?', options: ['SUM()', 'AVG()', 'COUNT()', 'MAX()'], correctAnswer: 'COUNT()' }, { questionText: 'What is a subquery?', options: ['A query that is nested inside another query', 'A query that cannot be executed', 'An outdated query format', 'A query to create a table'], correctAnswer: 'A query that is nested inside another query' }, { questionText: 'The `HAVING` clause was added to SQL because the `WHERE` keyword could not be used with what?', options: ['Functions', 'Subqueries', 'Aggregate functions', 'JOINs'], correctAnswer: 'Aggregate functions' }, ] },
-    'sql_expert': { questions: [ { questionText: 'What is a Common Table Expression (CTE)?', options: ['A temporary named result set that you can reference within another SQL statement', 'A permanent table', 'A type of index', 'A security feature'], correctAnswer: 'A temporary named result set that you can reference within another SQL statement' }, { questionText: 'What is the purpose of a window function like `ROW_NUMBER()`?', options: ['To calculate a running total', 'To assign a unique integer to each row within a partition of a result set', 'To find the average value', 'To join two tables'], correctAnswer: 'To assign a unique integer to each row within a partition of a result set' }, { questionText: 'What does a `TRANSACTION` ensure in a database?', options: ['Faster queries', 'That a group of SQL statements execute as a single, atomic unit', 'Better security', 'Automatic backups'], correctAnswer: 'That a group of SQL statements execute as a single, atomic unit' }, { questionText: 'What is the primary purpose of creating an index on a table?', options: ['To enforce uniqueness', 'To speed up the performance of queries', 'To store data in a sorted order', 'To make the table read-only'], correctAnswer: 'To speed up the performance of queries' }, { questionText: 'Which statement is used to combine the result-sets of two or more SELECT statements?', options: ['COMBINE', 'MERGE', 'UNION', 'JOIN'], correctAnswer: 'UNION' }, ] }
+    'javascript_beginner': { questions: [ { questionText: 'What does "DOM" stand for?', options: ['Document Object Model', 'Data Object Model', 'Desktop Oriented Markup', 'Digital Ordinance Map'], correctAnswer: 'Document Object Model' }, { questionText: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const' } ] },
+    'react_beginner': { questions: [ { questionText: 'What is JSX?', options: ['JavaScript XML', 'JavaScript Extension', 'Java Syntax Extension', 'JSON Syntax Extension'], correctAnswer: 'JavaScript XML' }, { questionText: 'Which hook is used to manage state in a functional component?', options: ['useEffect', 'useState', 'useContext', 'useReducer'], correctAnswer: 'useState' } ] },
+    'devops_beginner': { questions: [ { questionText: 'What is CI/CD?', options: ['Continuous Integration / Continuous Deployment', 'Code Integration / Code Deployment', 'Continuous Information / Continuous Data', 'Code Information / Code Data'], correctAnswer: 'Continuous Integration / Continuous Deployment' }, { questionText: 'What is a popular containerization platform?', options: ['Docker', 'Kubernetes', 'Jenkins', 'Ansible'], correctAnswer: 'Docker' } ] }
 };
 
 // --- Auth Component ---
@@ -141,6 +135,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
     const [correctAnswer, setCorrectAnswer] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [adminMessage, setAdminMessage] = useState('');
+    const [file, setFile] = useState(null);
 
     const handleOptionChange = (index, value) => {
         const newOptions = [...options];
@@ -184,13 +179,118 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             setIsSubmitting(false);
         }
     };
+    
+    const handleFileUpload = (e) => {
+        const selectedFile = e.target.files[0];
+        if (selectedFile && (selectedFile.type === "application/json" || selectedFile.type === "text/csv")) {
+            setFile(selectedFile);
+            setAdminMessage('');
+        } else {
+            setFile(null);
+            setAdminMessage('Please upload a valid JSON or CSV file.');
+        }
+    };
+
+    const processAndUploadFile = async () => {
+        if (!file) {
+            setAdminMessage('Please select a file to upload.');
+            return;
+        }
+        setIsSubmitting(true);
+        setAdminMessage('Processing file...');
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const fileContent = event.target.result;
+            try {
+                let quizzesToUpload = {};
+                if (file.type === "application/json") {
+                    quizzesToUpload = JSON.parse(fileContent);
+                } else if (file.type === "text/csv") {
+                    const lines = fileContent.split('\n').filter(line => line.trim() !== '');
+                    const headers = lines[0].split(',').map(h => h.trim());
+                    for (let i = 1; i < lines.length; i++) {
+                        const data = lines[i].split(',').map(d => d.trim().replace(/^"|"$/g, ''));
+                        const row = headers.reduce((obj, nextKey, index) => {
+                            obj[nextKey] = data[index];
+                            return obj;
+                        }, {});
+                        
+                        const quizId = `${row.track.toLowerCase()}_${row.level.toLowerCase()}`;
+                        if (!quizzesToUpload[quizId]) {
+                            quizzesToUpload[quizId] = { questions: [] };
+                        }
+                        quizzesToUpload[quizId].questions.push({
+                            questionText: row.questionText,
+                            options: [row.option1, row.option2, row.option3, row.option4],
+                            correctAnswer: row.correctAnswer
+                        });
+                    }
+                }
+
+                for (const quizId in quizzesToUpload) {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
+                    await setDoc(docRef, quizzesToUpload[quizId]);
+                }
+
+                setAdminMessage('Successfully uploaded quizzes from file!');
+                setFile(null);
+
+            } catch (error) {
+                console.error("Error processing file:", error);
+                setAdminMessage('Error processing file. Make sure it is correctly formatted.');
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const csvTemplate = "track,level,questionText,option1,option2,option3,option4,correctAnswer\nreact,intermediate,\"What is the purpose of `useEffect`?\",\"To manage component state\",\"To perform side effects in components\",\"To create context\",\"To handle routing\",\"To perform side effects in components\"";
+    const jsonTemplate = JSON.stringify({
+      "react_intermediate": {
+        "questions": [
+          {
+            "questionText": "What is the purpose of `useEffect`?",
+            "options": ["To manage component state", "To perform side effects in components", "To create context", "To handle routing"],
+            "correctAnswer": "To perform side effects in components"
+          }
+        ]
+      }
+    }, null, 2);
 
     return (
         <div className="w-full max-w-4xl mx-auto p-4 my-8 bg-slate-800 rounded-xl shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Admin Panel</h2>
             
-            <form onSubmit={handleCreateQuiz} className="space-y-4 text-white">
-                <h3 className="text-xl font-semibold">Create New Quiz Question</h3>
+            {/* File Upload Form */}
+            <div className="space-y-4 text-white mb-8">
+                 <h3 className="text-xl font-semibold">Upload Quiz File (CSV/JSON)</h3>
+                 <div>
+                    <label className="block text-sm font-medium text-slate-300">Quiz File</label>
+                    <input type="file" accept=".csv, .json" onChange={handleFileUpload} className="mt-1 block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+                 </div>
+                 <button onClick={processAndUploadFile} disabled={isSubmitting || !file} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-slate-500">
+                    {isSubmitting ? 'Uploading...' : 'Upload from File'}
+                 </button>
+            </div>
+            
+            {/* Download Templates Section */}
+            <div className="mb-8 pt-4 border-t border-slate-700">
+                <h3 className="text-xl font-semibold text-white mb-4">Download Templates</h3>
+                <div className="flex gap-4">
+                    <a href={`data:text/csv;charset=utf-8,${encodeURIComponent(csvTemplate)}`} download="sample_quizzes.csv" className="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        Download CSV Template
+                    </a>
+                    <a href={`data:application/json;charset=utf-8,${encodeURIComponent(jsonTemplate)}`} download="sample_quizzes.json" className="flex-1 text-center bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        Download JSON Template
+                    </a>
+                </div>
+            </div>
+
+            {/* Create Single Quiz Form */}
+            <form onSubmit={handleCreateQuiz} className="space-y-4 text-white pt-8 border-t border-slate-700">
+                <h3 className="text-xl font-semibold">Create Single Quiz Question</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-300">Track</label>
@@ -198,6 +298,8 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                             <option value="javascript">JavaScript</option>
                             <option value="python">Python</option>
                             <option value="sql">SQL</option>
+                            <option value="react">React</option>
+                            <option value="devops">DevOps</option>
                         </select>
                     </div>
                     <div>
@@ -248,6 +350,8 @@ const TrackSelection = ({ onStartTest, isAdmin, onSeedDatabase, seeding, seeded 
         { id: 'javascript', name: 'JavaScript', color: 'bg-yellow-500', hover: 'hover:bg-yellow-600' },
         { id: 'python', name: 'Python', color: 'bg-blue-500', hover: 'hover:bg-blue-600' },
         { id: 'sql', name: 'SQL', color: 'bg-teal-500', hover: 'hover:bg-teal-600' },
+        { id: 'react', name: 'React', color: 'bg-sky-500', hover: 'hover:bg-sky-600' },
+        { id: 'devops', name: 'DevOps', color: 'bg-gray-500', hover: 'hover:bg-gray-600' },
     ];
     const levels = ['Beginner', 'Intermediate', 'Expert'];
 
