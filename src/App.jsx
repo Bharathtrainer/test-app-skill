@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import { 
     getAuth, 
     onAuthStateChanged,
@@ -52,9 +52,9 @@ const appId = firebaseConfig.appId;
 
 // --- Sample Quiz Data ---
 const sampleQuizzes = {
-    'javascript_beginner': { questions: [ { questionText: 'What does "DOM" stand for?', options: ['Document Object Model', 'Data Object Model', 'Desktop Oriented Markup', 'Digital Ordinance Map'], correctAnswer: 'Document Object Model' }, { questionText: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const' } ] },
-    'react_beginner': { questions: [ { questionText: 'What is JSX?', options: ['JavaScript XML', 'JavaScript Extension', 'Java Syntax Extension', 'JSON Syntax Extension'], correctAnswer: 'JavaScript XML' }, { questionText: 'Which hook is used to manage state in a functional component?', options: ['useEffect', 'useState', 'useContext', 'useReducer'], correctAnswer: 'useState' } ] },
-    'devops_beginner': { questions: [ { questionText: 'What is CI/CD?', options: ['Continuous Integration / Continuous Deployment', 'Code Integration / Code Deployment', 'Continuous Information / Continuous Data', 'Code Information / Code Data'], correctAnswer: 'Continuous Integration / Continuous Deployment' }, { questionText: 'What is a popular containerization platform?', options: ['Docker', 'Kubernetes', 'Jenkins', 'Ansible'], correctAnswer: 'Docker' } ] }
+    'javascript_beginner': { questions: [ { questionText: 'What does "DOM" stand for?', options: ['Document Object Model', 'Data Object Model', 'Desktop Oriented Markup', 'Digital Ordinance Map'], correctAnswer: 'Document Object Model', explanation: 'The DOM represents the page so that programs can change the document structure, style, and content.' }, { questionText: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const', explanation: '`const` declares a block-scoped variable, but its value cannot be reassigned.' } ] },
+    'react_beginner': { questions: [ { questionText: 'What is JSX?', options: ['JavaScript XML', 'JavaScript Extension', 'Java Syntax Extension', 'JSON Syntax Extension'], correctAnswer: 'JavaScript XML', explanation: 'JSX is a syntax extension for JavaScript that lets you write HTML-like markup inside a JavaScript file.' }, { questionText: 'Which hook is used to manage state in a functional component?', options: ['useEffect', 'useState', 'useContext', 'useReducer'], correctAnswer: 'useState', explanation: 'The `useState` hook is a special function that lets you “hook into” React features.' } ] },
+    'devops_beginner': { questions: [ { questionText: 'What is CI/CD?', options: ['Continuous Integration / Continuous Deployment', 'Code Integration / Code Deployment', 'Continuous Information / Continuous Data', 'Code Information / Code Data'], correctAnswer: 'Continuous Integration / Continuous Deployment', explanation: 'CI/CD is a method to frequently deliver apps to customers by introducing automation into the stages of app development.' }, { questionText: 'What is a popular containerization platform?', options: ['Docker', 'Kubernetes', 'Jenkins', 'Ansible'], correctAnswer: 'Docker', explanation: 'Docker is an open platform for developing, shipping, and running applications in containers.' } ] }
 };
 
 // --- Auth Component ---
@@ -128,6 +128,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
     const [questionText, setQuestionText] = useState('');
     const [options, setOptions] = useState(['', '', '', '']);
     const [correctAnswer, setCorrectAnswer] = useState('');
+    const [explanation, setExplanation] = useState('');
     
     // State for file upload
     const [fileTrack, setFileTrack] = useState('javascript');
@@ -141,6 +142,21 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [adminMessage, setAdminMessage] = useState('');
     const [questionCounts, setQuestionCounts] = useState({});
+
+    const hasUnsavedChanges = questionText || options.some(opt => opt) || correctAnswer || explanation || file;
+
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (hasUnsavedChanges) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [hasUnsavedChanges]);
 
     const fetchAdminData = useCallback(async () => {
         // Fetch question counts
@@ -204,7 +220,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         setAdminMessage('');
 
         const quizId = `${manualTrack.toLowerCase()}_${manualLevel.toLowerCase()}`;
-        const newQuestion = { questionText, options, correctAnswer };
+        const newQuestion = { questionText, options, correctAnswer, explanation };
 
         try {
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
@@ -222,6 +238,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             setQuestionText('');
             setOptions(['', '', '', '']);
             setCorrectAnswer('');
+            setExplanation('');
             fetchAdminData(); // Refresh counts
 
         } catch (error) {
@@ -276,7 +293,8 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                         newQuestions.push({
                             questionText: row.questionText,
                             options: [row.option1, row.option2, row.option3, row.option4],
-                            correctAnswer: row.correctAnswer
+                            correctAnswer: row.correctAnswer,
+                            explanation: row.explanation || ''
                         });
                     }
                 }
@@ -302,11 +320,12 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         reader.readAsText(file);
     };
 
-    const csvTemplate = "questionText,option1,option2,option3,option4,correctAnswer\n\"What is the purpose of `useEffect`?\",\"To manage component state\",\"To perform side effects in components\",\"To create context\",\"To handle routing\",\"To perform side effects in components\"";
+    const csvTemplate = "questionText,option1,option2,option3,option4,correctAnswer,explanation\n\"What is the purpose of `useEffect`?\",\"To manage component state\",\"To perform side effects in components\",\"To create context\",\"To handle routing\",\"To perform side effects in components\",\"It allows you to perform side effects from a function component.\"";
     const jsonTemplate = JSON.stringify([{
         "questionText": "What is the purpose of `useEffect`?",
         "options": ["To manage component state", "To perform side effects in components", "To create context", "To handle routing"],
-        "correctAnswer": "To perform side effects in components"
+        "correctAnswer": "To perform side effects in components",
+        "explanation": "It allows you to perform side effects from a function component."
     }], null, 2);
 
     return (
@@ -427,6 +446,10 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                     <label className="block text-sm font-medium text-slate-300">Correct Answer</label>
                     <input type="text" value={correctAnswer} onChange={(e) => setCorrectAnswer(e.target.value)} placeholder="Must match one of the options exactly" className="mt-1 block w-full shadow-sm sm:text-sm border-slate-700 bg-slate-900 rounded-md" />
                 </div>
+                 <div>
+                    <label className="block text-sm font-medium text-slate-300">Explanation</label>
+                    <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows="2" className="mt-1 block w-full shadow-sm sm:text-sm border-slate-700 bg-slate-900 rounded-md"></textarea>
+                </div>
                 <button type="submit" disabled={isSubmitting} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-slate-500">
                     {isSubmitting ? 'Submitting...' : 'Add Question'}
                 </button>
@@ -445,7 +468,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
 
 
 // --- Components ---
-const TrackSelection = ({ onStartTest }) => {
+const TrackSelection = ({ onStartTest, userId }) => {
     const tracks = [
         { id: 'javascript', name: 'JavaScript', color: 'bg-yellow-500', hover: 'hover:bg-yellow-600' },
         { id: 'python', name: 'Python', color: 'bg-blue-500', hover: 'hover:bg-blue-600' },
@@ -456,6 +479,33 @@ const TrackSelection = ({ onStartTest }) => {
     const levels = ['Beginner', 'Intermediate', 'Expert'];
 
     const [selectedTrack, setSelectedTrack] = useState(null);
+    const [attemptedQuizzes, setAttemptedQuizzes] = useState(new Set());
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+    useEffect(() => {
+        if (!userId) {
+            setIsLoadingHistory(false);
+            return;
+        };
+
+        const fetchHistory = async () => {
+            setIsLoadingHistory(true);
+            const historyCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'progress');
+            const querySnapshot = await getDocs(historyCollectionRef);
+            const attempts = new Set();
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.track && data.level) {
+                    const quizId = `${data.track.toLowerCase()}_${data.level.toLowerCase()}`;
+                    attempts.add(quizId);
+                }
+            });
+            setAttemptedQuizzes(attempts);
+            setIsLoadingHistory(false);
+        };
+
+        fetchHistory();
+    }, [userId]);
 
     return (
         <div className="w-full max-w-4xl mx-auto p-4 md:p-8">
@@ -478,11 +528,28 @@ const TrackSelection = ({ onStartTest }) => {
                     <div className="mt-8 pt-6 border-t border-slate-700">
                         <h2 className="text-2xl font-semibold text-white mb-6">2. Select a Level</h2>
                         <div className="flex flex-col md:flex-row justify-center gap-4">
-                            {levels.map(level => (
-                                <button key={level} onClick={() => onStartTest(selectedTrack, level)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-8 rounded-lg transition-transform duration-200 hover:scale-105 shadow-lg w-full md:w-auto">
-                                    {level}
-                                </button>
-                            ))}
+                            {isLoadingHistory ? (
+                                <p className="text-slate-400">Loading history...</p>
+                            ) : (
+                                levels.map(level => {
+                                    const quizId = `${selectedTrack.toLowerCase()}_${level.toLowerCase()}`;
+                                    const isAttempted = attemptedQuizzes.has(quizId);
+                                    return (
+                                        <button 
+                                            key={level} 
+                                            onClick={() => onStartTest(selectedTrack, level)} 
+                                            disabled={isAttempted}
+                                            className={`bg-indigo-600 text-white font-semibold py-4 px-8 rounded-lg transition-transform duration-200 shadow-lg w-full md:w-auto ${
+                                                isAttempted 
+                                                ? 'bg-gray-600 cursor-not-allowed opacity-50' 
+                                                : 'hover:bg-indigo-700 hover:scale-105'
+                                            }`}
+                                        >
+                                            {isAttempted ? 'Attempted' : level}
+                                        </button>
+                                    );
+                                })
+                            )}
                         </div>
                     </div>
                 )}
@@ -505,14 +572,14 @@ const Quiz = ({ db, track, level, onFinish }) => {
     const [isPaused, setIsPaused] = useState(false);
     const [isTimeWarning, setIsTimeWarning] = useState(false);
 
-    const handleFinishQuiz = useCallback(() => {
+    const handleFinishQuiz = useCallback((switchedTabs = false) => {
         let score = 0;
         for (let i = 0; i < questions.length; i++) {
             if (selectedAnswers[i] === questions[i].correctAnswer) {
                 score++;
             }
         }
-        onFinish(score, questions.length, questions, selectedAnswers);
+        onFinish(score, questions.length, questions, selectedAnswers, switchedTabs);
     }, [questions, selectedAnswers, onFinish]);
 
     const handleNext = useCallback(() => {
@@ -531,11 +598,24 @@ const Quiz = ({ db, track, level, onFinish }) => {
 
     useEffect(() => {
         const handleVisibilityChange = () => {
-            setIsPaused(document.hidden);
+            if (document.hidden) {
+                handleFinishQuiz(true);
+            }
         };
+
+        const handleBeforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = 'Are you sure you want to leave? Your quiz will be submitted.';
+        };
+
         document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-    }, []);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [handleFinishQuiz]);
 
     useEffect(() => {
         if(questions.length === 0 || isPaused) return;
@@ -583,7 +663,8 @@ const Quiz = ({ db, track, level, onFinish }) => {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists() && docSnap.data().questions.length > 0) {
-                    setQuestions(docSnap.data().questions);
+                    const shuffledQuestions = [...docSnap.data().questions].sort(() => Math.random() - 0.5);
+                    setQuestions(shuffledQuestions);
                 } else {
                     setError(`No quiz found for ${track} - ${level}. Please seed the database or ask an admin to add questions.`);
                 }
@@ -698,7 +779,7 @@ const Quiz = ({ db, track, level, onFinish }) => {
     );
 };
 
-const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, questions, selectedAnswers }) => {
+const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, questions, selectedAnswers, switchedTabs }) => {
     const percentage = Math.round((score / totalQuestions) * 100);
     const [showReview, setShowReview] = useState(false);
 
@@ -707,20 +788,22 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, q
             if (!userId) return;
             try {
                 const resultsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'progress');
-                await addDoc(resultsCollectionRef, { track, level, score, totalQuestions, percentage, completedAt: new Date() });
+                await addDoc(resultsCollectionRef, { track, level, score, totalQuestions, percentage, completedAt: new Date(), switchedTabs: switchedTabs || false });
             } catch (error) {
                 console.error("Error saving result: ", error);
             }
         };
         saveResult();
-    }, [db, userId, track, level, score, totalQuestions, percentage]);
+    }, [db, userId, track, level, score, totalQuestions, percentage, switchedTabs]);
     
     let feedback = {
         title: "Great Effort!",
         message: "Keep practicing to master this skill.",
         color: "text-yellow-400"
     };
-    if (percentage >= 80) {
+    if (switchedTabs) {
+        feedback = { title: "Quiz Incomplete", message: "The quiz was automatically submitted because you switched to another tab or window.", color: "text-red-400" };
+    } else if (percentage >= 80) {
         feedback = { title: "Excellent!", message: "You have a strong command of this topic.", color: "text-green-400" };
     } else if (percentage < 40) {
         feedback = { title: "Needs Improvement", message: "Review the basics and try again.", color: "text-red-400" };
@@ -764,6 +847,7 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, q
                                 <p className="font-bold text-white mb-2">Q{index + 1}: {q.questionText}</p>
                                 <p className={`text-sm ${isCorrect ? 'text-green-300' : 'text-red-300'}`}>Your answer: <span className="font-semibold">{userAnswer || 'Not Answered'}</span></p>
                                 {!isCorrect && <p className="text-sm text-green-300">Correct answer: <span className="font-semibold">{q.correctAnswer}</span></p>}
+                                {q.explanation && <p className="text-sm text-slate-400 mt-2"><em>Explanation:</em> {q.explanation}</p>}
                             </div>
                         );
                     })}
@@ -773,11 +857,13 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, q
     );
 };
 
-const AppHeader = ({ user, onSignOut }) => (
+const AppHeader = ({ user, onSignOut, onNavigate, isAdmin }) => (
     <header className="bg-slate-800 p-4 shadow-md">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 className="text-xl font-bold text-white">Skill Index</h1>
+            <h1 className="text-xl font-bold text-white cursor-pointer" onClick={() => onNavigate('home')}>Skill Index</h1>
             <div className="flex items-center gap-4">
+                {!isAdmin && <button onClick={() => onNavigate('history')} className="text-sm text-slate-300 hover:text-white">Quiz History</button>}
+                {isAdmin && <button onClick={() => onNavigate('analytics')} className="text-sm text-slate-300 hover:text-white">Analytics</button>}
                 <span className="text-sm text-slate-300">{user.email}</span>
                 <button onClick={onSignOut} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
                     Sign Out
@@ -799,15 +885,234 @@ const AdminDashboard = ({ onSeedDatabase, seeding, seeded }) => {
     );
 };
 
+const QuizHistory = ({ userId }) => {
+    const [history, setHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchHistory = async () => {
+            if (!userId) return;
+            setLoading(true);
+            const historyCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'progress');
+            const q = query(historyCollectionRef, orderBy("completedAt", "desc"));
+            const querySnapshot = await getDocs(q);
+            const historyData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setHistory(historyData);
+            setLoading(false);
+        };
+        fetchHistory();
+    }, [userId]);
+
+    if(loading) return <div className="text-white text-center p-10">Loading History...</div>
+
+    return (
+        <div className="w-full max-w-4xl mx-auto p-4 md:p-8">
+            <h1 className="text-4xl md:text-5xl font-bold text-white mb-8 text-center">Quiz History</h1>
+            <div className="bg-slate-800 rounded-xl shadow-2xl overflow-hidden">
+                <table className="min-w-full text-white">
+                    <thead className="bg-slate-700">
+                        <tr>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Track</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Level</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Score</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Percentage</th>
+                            <th className="py-3 px-4 text-left text-sm font-semibold uppercase">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700">
+                        {history.length > 0 ? history.map(item => (
+                            <tr key={item.id}>
+                                <td className="py-4 px-4 capitalize">{item.track}</td>
+                                <td className="py-4 px-4 capitalize">{item.level}</td>
+                                <td className="py-4 px-4">{item.score}/{item.totalQuestions}</td>
+                                <td className="py-4 px-4">{item.percentage}%</td>
+                                <td className="py-4 px-4">{new Date(item.completedAt.seconds * 1000).toLocaleDateString()}</td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="text-center py-8 text-slate-400">You haven't completed any quizzes yet.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const AnalyticsDashboard = () => {
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    const calculateStats = useCallback(async () => {
+        setLoading(true);
+        const usersCollectionRef = collection(db, 'artifacts', appId, 'users');
+        const usersSnapshot = await getDocs(usersCollectionRef);
+        
+        let allProgress = [];
+        for (const userDoc of usersSnapshot.docs) {
+            const progressCollectionRef = collection(db, 'artifacts', appId, 'users', userDoc.id, 'progress');
+            const progressSnapshot = await getDocs(progressCollectionRef);
+            progressSnapshot.forEach(doc => {
+                allProgress.push({ userId: userDoc.id, ...doc.data() });
+            });
+        }
+
+        if (allProgress.length === 0) {
+            setStats({
+                totalQuizzes: 0, averageScore: 0, passRate: 0,
+                popularTracks: {}, topPerformers: []
+            });
+            setLoading(false);
+            return;
+        }
+
+        const totalQuizzes = allProgress.length;
+        const totalPercentage = allProgress.reduce((sum, p) => sum + p.percentage, 0);
+        const averageScore = totalPercentage / totalQuizzes;
+        const passedQuizzes = allProgress.filter(p => p.percentage >= 60).length;
+        const passRate = (passedQuizzes / totalQuizzes) * 100;
+
+        const popularTracks = allProgress.reduce((acc, p) => {
+            acc[p.track] = (acc[p.track] || 0) + 1;
+            return acc;
+        }, {});
+
+        const userScores = allProgress.reduce((acc, p) => {
+            if (!acc[p.userId]) {
+                acc[p.userId] = { totalScore: 0, count: 0, email: 'N/A' };
+            }
+            acc[p.userId].totalScore += p.percentage;
+            acc[p.userId].count += 1;
+            return acc;
+        }, {});
+
+        const topPerformers = Object.entries(userScores)
+            .map(([userId, data]) => ({
+                userId,
+                average: data.totalScore / data.count,
+                quizzesTaken: data.count
+            }))
+            .sort((a, b) => b.average - a.average)
+            .slice(0, 5);
+
+        setStats({
+            totalQuizzes,
+            averageScore: averageScore.toFixed(2),
+            passRate: passRate.toFixed(2),
+            popularTracks,
+            topPerformers
+        });
+
+        setLoading(false);
+    }, []);
+
+    useEffect(() => {
+        calculateStats();
+    }, [calculateStats]);
+
+    const exportToCsv = () => {
+        alert("Data export functionality would be implemented here.");
+    };
+
+    if (loading) return <div className="text-white text-center p-10">Loading Analytics...</div>;
+
+    return (
+        <div className="w-full max-w-6xl mx-auto p-4 md:p-8 text-white">
+            <h1 className="text-4xl md:text-5xl font-bold mb-8 text-center">Analytics Dashboard</h1>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-slate-800 p-6 rounded-xl">
+                    <h3 className="text-slate-400 text-sm font-medium">Total Quizzes Taken</h3>
+                    <p className="text-3xl font-bold">{stats.totalQuizzes}</p>
+                </div>
+                <div className="bg-slate-800 p-6 rounded-xl">
+                    <h3 className="text-slate-400 text-sm font-medium">Average Score</h3>
+                    <p className="text-3xl font-bold">{stats.averageScore}%</p>
+                </div>
+                <div className="bg-slate-800 p-6 rounded-xl">
+                    <h3 className="text-slate-400 text-sm font-medium">Pass Rate (&gt;60%)</h3>
+                    <p className="text-3xl font-bold">{stats.passRate}%</p>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <div className="bg-slate-800 p-6 rounded-xl">
+                    <h3 className="font-semibold mb-4">Top Performers (by Avg. Score)</h3>
+                    <ul>
+                        {stats.topPerformers.map((p, i) => (
+                            <li key={p.userId} className="flex justify-between items-center py-2 border-b border-slate-700">
+                                <span>{i+1}. User {p.userId.substring(0,8)}...</span>
+                                <span className="font-bold">{p.average.toFixed(2)}%</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="bg-slate-800 p-6 rounded-xl">
+                    <h3 className="font-semibold mb-4">Most Popular Tracks</h3>
+                     <ul>
+                        {Object.entries(stats.popularTracks).sort(([,a],[,b]) => b-a).map(([track, count]) => (
+                            <li key={track} className="flex justify-between items-center py-2 border-b border-slate-700">
+                                <span className="capitalize">{track}</span>
+                                <span className="font-bold">{count} attempts</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+             <div className="mt-8 text-center">
+                <button onClick={exportToCsv} className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg">
+                    Export All User Data (CSV)
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const ConsentModal = ({ onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-slate-800 rounded-xl shadow-2xl p-8 max-w-lg w-full text-white">
+            <h2 className="text-2xl font-bold mb-4">Quiz Rules & Consent</h2>
+            <p className="text-slate-300 mb-6">
+                Please read the following rules carefully before starting the test.
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-slate-300 mb-8">
+                <li>The quiz is timed, both for each question and for the overall test.</li>
+                <li>You must remain in full-screen mode for the duration of the test.</li>
+                <li>
+                    Your test will be **automatically submitted** under the following conditions:
+                </li>
+                <li className="ml-4 font-semibold text-yellow-400">Exiting full-screen mode.</li>
+                <li className="ml-4 font-semibold text-yellow-400">Switching to another browser tab or window.</li>
+                <li className="ml-4 font-semibold text-yellow-400">Closing the browser tab or window.</li>
+                <li className="ml-4 font-semibold text-yellow-400">Opening developer tools (F12).</li>
+                <li className="ml-4 font-semibold text-yellow-400">Losing your internet connection.</li>
+            </ul>
+            <p className="text-slate-300 mb-6">
+                Please ensure you have a stable connection and can focus for the duration of the test.
+            </p>
+            <div className="flex justify-end gap-4">
+                <button onClick={onCancel} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg">
+                    Cancel
+                </button>
+                <button onClick={onConfirm} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg">
+                    Agree & Start Quiz
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 
 export default function App() {
     const [view, setView] = useState('home');
     const [quizConfig, setQuizConfig] = useState({ track: null, level: null });
-    const [quizResult, setQuizResult] = useState({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {} });
+    const [quizResult, setQuizResult] = useState({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {}, switchedTabs: false });
     const [user, setUser] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [seeding, setSeeding] = useState(false);
     const [seeded, setSeeded] = useState(false);
+    const [isConsentModalOpen, setIsConsentModalOpen] = useState(false);
+    const [pendingQuizConfig, setPendingQuizConfig] = useState(null);
     
     const isAdmin = user && user.email === ADMIN_EMAIL;
 
@@ -843,20 +1148,42 @@ export default function App() {
         setSeeding(false);
     }, []);
 
-    const handleStartTest = (track, level) => {
-        setQuizConfig({ track, level });
-        setView('test');
+    const handleStartTestRequest = (track, level) => {
+        setPendingQuizConfig({ track, level });
+        setIsConsentModalOpen(true);
     };
 
-    const handleFinishTest = (score, totalQuestions, questions, selectedAnswers) => {
-        setQuizResult({ score, totalQuestions, questions, selectedAnswers });
+    const handleConsentConfirm = () => {
+        if (pendingQuizConfig) {
+            // Enter fullscreen before starting the quiz
+            document.documentElement.requestFullscreen().then(() => {
+                setQuizConfig(pendingQuizConfig);
+                setView('test');
+            }).catch(err => {
+                alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+            });
+        }
+        setIsConsentModalOpen(false);
+        setPendingQuizConfig(null);
+    };
+
+    const handleConsentCancel = () => {
+        setIsConsentModalOpen(false);
+        setPendingQuizConfig(null);
+    };
+
+    const handleFinishTest = (score, totalQuestions, questions, selectedAnswers, switchedTabs = false, networkIssue = false) => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+        setQuizResult({ score, totalQuestions, questions, selectedAnswers, switchedTabs, networkIssue });
         setView('results');
     };
 
     const handleRestart = () => {
         setView('home');
         setQuizConfig({ track: null, level: null });
-        setQuizResult({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {} });
+        setQuizResult({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {}, switchedTabs: false });
     };
     
     const renderUserView = () => {
@@ -865,9 +1192,21 @@ export default function App() {
                 return <Quiz db={db} track={quizConfig.track} level={quizConfig.level} onFinish={handleFinishTest} />;
             case 'results':
                 return <Results db={db} userId={user.uid} track={quizConfig.track} level={quizConfig.level} {...quizResult} onRestart={handleRestart} />;
+            case 'history':
+                return <QuizHistory userId={user.uid} />;
             case 'home':
             default:
-                return <TrackSelection onStartTest={handleStartTest} />;
+                return <TrackSelection onStartTest={handleStartTestRequest} userId={user.uid} />;
+        }
+    };
+
+    const renderAdminView = () => {
+        switch (view) {
+            case 'analytics':
+                return <AnalyticsDashboard />;
+            case 'home':
+            default:
+                return <AdminDashboard onSeedDatabase={handleSeedDatabase} seeding={seeding} seeded={seeded} />;
         }
     };
 
@@ -877,19 +1216,16 @@ export default function App() {
 
     return (
         <div className="bg-slate-900 min-h-screen w-full font-sans">
+            {isConsentModalOpen && <ConsentModal onConfirm={handleConsentConfirm} onCancel={handleConsentCancel} />}
             {!user ? (
                 <AuthScreen />
             ) : (
                 <>
-                    <AppHeader user={user} onSignOut={handleSignOut} />
+                    <AppHeader user={user} onSignOut={handleSignOut} onNavigate={setView} isAdmin={isAdmin} />
                     <main className="flex items-center justify-center p-4">
                         <style>{`.prose-invert { --tw-prose-body: #d1d5db; --tw-prose-headings: #fff; --tw-prose-lead: #a1a1aa; --tw-prose-links: #fff; --tw-prose-bold: #fff; --tw-prose-counters: #a1a1aa; --tw-prose-bullets: #a1a1aa; --tw-prose-hr: #404040; --tw-prose-quotes: #f3f4f6; --tw-prose-quote-borders: #404040; --tw-prose-captions: #a1a1aa; --tw-prose-code: #fff; --tw-prose-pre-code: #d1d5db; --tw-prose-pre-bg: #1f2937; --tw-prose-th-borders: #404040; --tw-prose-td-borders: #374151; }`}</style>
                         <div className="w-full">
-                           {isAdmin ? (
-                                <AdminDashboard onSeedDatabase={handleSeedDatabase} seeding={seeding} seeded={seeded} />
-                           ) : (
-                                renderUserView()
-                           )}
+                           {isAdmin ? renderAdminView() : renderUserView()}
                         </div>
                     </main>
                 </>
