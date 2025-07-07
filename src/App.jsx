@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs } from 'firebase/firestore';
 import { 
     getAuth, 
     onAuthStateChanged,
@@ -128,14 +128,40 @@ const AuthScreen = () => {
 
 // --- Admin Panel Component ---
 const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
-    const [track, setTrack] = useState('javascript');
-    const [level, setLevel] = useState('beginner');
+    // State for single question form
+    const [manualTrack, setManualTrack] = useState('javascript');
+    const [manualLevel, setManualLevel] = useState('beginner');
     const [questionText, setQuestionText] = useState('');
     const [options, setOptions] = useState(['', '', '', '']);
     const [correctAnswer, setCorrectAnswer] = useState('');
+    
+    // State for file upload
+    const [fileTrack, setFileTrack] = useState('javascript');
+    const [fileLevel, setFileLevel] = useState('beginner');
+    const [file, setFile] = useState(null);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [adminMessage, setAdminMessage] = useState('');
-    const [file, setFile] = useState(null);
+    const [questionCounts, setQuestionCounts] = useState({});
+
+    const fetchQuestionCounts = useCallback(async () => {
+        const counts = {};
+        const quizzesCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'quizzes');
+        const querySnapshot = await getDocs(quizzesCollectionRef);
+        querySnapshot.forEach((doc) => {
+            const [track, level] = doc.id.split('_');
+            const count = doc.data().questions?.length || 0;
+            if (!counts[track]) {
+                counts[track] = {};
+            }
+            counts[track][level] = count;
+        });
+        setQuestionCounts(counts);
+    }, []);
+
+    useEffect(() => {
+        fetchQuestionCounts();
+    }, [fetchQuestionCounts]);
 
     const handleOptionChange = (index, value) => {
         const newOptions = [...options];
@@ -146,13 +172,13 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
     const handleCreateQuiz = async (e) => {
         e.preventDefault();
         if (!questionText || options.some(opt => opt === '') || !correctAnswer) {
-            setAdminMessage('Please fill all fields.');
+            setAdminMessage({ type: 'error', text: 'Please fill all fields for the single question.' });
             return;
         }
         setIsSubmitting(true);
-        setAdminMessage('');
+        setAdminMessage({ type: '', text: '' });
 
-        const quizId = `${track.toLowerCase()}_${level.toLowerCase()}`;
+        const quizId = `${manualTrack.toLowerCase()}_${manualLevel.toLowerCase()}`;
         const newQuestion = { questionText, options, correctAnswer };
 
         try {
@@ -167,14 +193,15 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             
             await setDoc(docRef, { questions: updatedQuestions });
 
-            setAdminMessage(`Successfully added question to ${track} - ${level}!`);
+            setAdminMessage({ type: 'success', text: `Successfully added question to ${manualTrack} - ${manualLevel}!` });
             setQuestionText('');
             setOptions(['', '', '', '']);
             setCorrectAnswer('');
+            fetchQuestionCounts(); // Refresh counts
 
         } catch (error) {
             console.error("Error creating quiz:", error);
-            setAdminMessage('Error creating quiz. Check console for details.');
+            setAdminMessage({ type: 'error', text: 'Error creating quiz. Check console for details.' });
         } finally {
             setIsSubmitting(false);
         }
@@ -184,28 +211,33 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         const selectedFile = e.target.files[0];
         if (selectedFile && (selectedFile.type === "application/json" || selectedFile.type === "text/csv")) {
             setFile(selectedFile);
-            setAdminMessage('');
+            setAdminMessage({ type: '', text: '' });
         } else {
             setFile(null);
-            setAdminMessage('Please upload a valid JSON or CSV file.');
+            setAdminMessage({ type: 'error', text: 'Please upload a valid JSON or CSV file.' });
         }
     };
 
     const processAndUploadFile = async () => {
         if (!file) {
-            setAdminMessage('Please select a file to upload.');
+            setAdminMessage({ type: 'error', text: 'Please select a file to upload.' });
             return;
         }
         setIsSubmitting(true);
-        setAdminMessage('Processing file...');
+        setAdminMessage({ type: 'info', text: 'Processing file...' });
 
         const reader = new FileReader();
         reader.onload = async (event) => {
             const fileContent = event.target.result;
             try {
-                let quizzesToUpload = {};
+                let newQuestions = [];
                 if (file.type === "application/json") {
-                    quizzesToUpload = JSON.parse(fileContent);
+                    const data = JSON.parse(fileContent);
+                    if(Array.isArray(data)) {
+                        newQuestions = data;
+                    } else {
+                        throw new Error("JSON file must be an array of question objects.");
+                    }
                 } else if (file.type === "text/csv") {
                     const lines = fileContent.split('\n').filter(line => line.trim() !== '');
                     const headers = lines[0].split(',').map(h => h.trim());
@@ -216,11 +248,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                             return obj;
                         }, {});
                         
-                        const quizId = `${row.track.toLowerCase()}_${row.level.toLowerCase()}`;
-                        if (!quizzesToUpload[quizId]) {
-                            quizzesToUpload[quizId] = { questions: [] };
-                        }
-                        quizzesToUpload[quizId].questions.push({
+                        newQuestions.push({
                             questionText: row.questionText,
                             options: [row.option1, row.option2, row.option3, row.option4],
                             correctAnswer: row.correctAnswer
@@ -228,17 +256,20 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                     }
                 }
 
-                for (const quizId in quizzesToUpload) {
-                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
-                    await setDoc(docRef, quizzesToUpload[quizId]);
-                }
+                const quizId = `${fileTrack.toLowerCase()}_${fileLevel.toLowerCase()}`;
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', quizId);
+                const docSnap = await getDoc(docRef);
+                let existingQuestions = docSnap.exists() ? docSnap.data().questions : [];
 
-                setAdminMessage('Successfully uploaded quizzes from file!');
+                await setDoc(docRef, { questions: [...existingQuestions, ...newQuestions] });
+
+                setAdminMessage({ type: 'success', text: `Successfully uploaded ${newQuestions.length} questions to ${fileTrack} - ${fileLevel}!` });
                 setFile(null);
+                fetchQuestionCounts(); // Refresh counts
 
             } catch (error) {
                 console.error("Error processing file:", error);
-                setAdminMessage('Error processing file. Make sure it is correctly formatted.');
+                setAdminMessage({ type: 'error', text: 'Error processing file. Make sure it is correctly formatted.' });
             } finally {
                 setIsSubmitting(false);
             }
@@ -246,26 +277,57 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         reader.readAsText(file);
     };
 
-    const csvTemplate = "track,level,questionText,option1,option2,option3,option4,correctAnswer\nreact,intermediate,\"What is the purpose of `useEffect`?\",\"To manage component state\",\"To perform side effects in components\",\"To create context\",\"To handle routing\",\"To perform side effects in components\"";
-    const jsonTemplate = JSON.stringify({
-      "react_intermediate": {
-        "questions": [
-          {
-            "questionText": "What is the purpose of `useEffect`?",
-            "options": ["To manage component state", "To perform side effects in components", "To create context", "To handle routing"],
-            "correctAnswer": "To perform side effects in components"
-          }
-        ]
-      }
-    }, null, 2);
+    const csvTemplate = "questionText,option1,option2,option3,option4,correctAnswer\n\"What is the purpose of `useEffect`?\",\"To manage component state\",\"To perform side effects in components\",\"To create context\",\"To handle routing\",\"To perform side effects in components\"";
+    const jsonTemplate = JSON.stringify([{
+        "questionText": "What is the purpose of `useEffect`?",
+        "options": ["To manage component state", "To perform side effects in components", "To create context", "To handle routing"],
+        "correctAnswer": "To perform side effects in components"
+    }], null, 2);
 
     return (
         <div className="w-full max-w-4xl mx-auto p-4 my-8 bg-slate-800 rounded-xl shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Admin Panel</h2>
             
+            {/* Question Bank Status */}
+            <div className="mb-8 p-4 bg-slate-700/50 rounded-lg">
+                <h3 className="text-xl font-semibold text-white mb-4">Question Bank Status</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-white">
+                    {Object.keys(questionCounts).length > 0 ? Object.keys(questionCounts).map(track => (
+                        <div key={track}>
+                            <h4 className="font-bold capitalize">{track}</h4>
+                            <ul className="text-sm list-disc list-inside">
+                                {Object.keys(questionCounts[track]).map(level => (
+                                    <li key={level}><span className="capitalize">{level}</span>: {questionCounts[track][level]}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )) : <p className="text-slate-400 col-span-full">No questions found. Seed or upload quizzes to begin.</p>}
+                </div>
+            </div>
+
             {/* File Upload Form */}
             <div className="space-y-4 text-white mb-8">
                  <h3 className="text-xl font-semibold">Upload Quiz File (CSV/JSON)</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300">Target Track</label>
+                        <select value={fileTrack} onChange={(e) => setFileTrack(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-slate-700 bg-slate-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="sql">SQL</option>
+                            <option value="react">React</option>
+                            <option value="devops">DevOps</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300">Target Level</label>
+                        <select value={fileLevel} onChange={(e) => setFileLevel(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-slate-700 bg-slate-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="expert">Expert</option>
+                        </select>
+                    </div>
+                </div>
                  <div>
                     <label className="block text-sm font-medium text-slate-300">Quiz File</label>
                     <input type="file" accept=".csv, .json" onChange={handleFileUpload} className="mt-1 block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
@@ -275,7 +337,6 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                  </button>
             </div>
             
-            {/* Download Templates Section */}
             <div className="mb-8 pt-4 border-t border-slate-700">
                 <h3 className="text-xl font-semibold text-white mb-4">Download Templates</h3>
                 <div className="flex gap-4">
@@ -294,7 +355,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-300">Track</label>
-                        <select value={track} onChange={(e) => setTrack(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-slate-700 bg-slate-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <select value={manualTrack} onChange={(e) => setManualTrack(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-slate-700 bg-slate-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                             <option value="javascript">JavaScript</option>
                             <option value="python">Python</option>
                             <option value="sql">SQL</option>
@@ -304,7 +365,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-300">Level</label>
-                        <select value={level} onChange={(e) => setLevel(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-slate-700 bg-slate-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <select value={manualLevel} onChange={(e) => setManualLevel(e.target.value)} className="mt-1 block w-full py-2 px-3 border border-slate-700 bg-slate-900 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                             <option value="beginner">Beginner</option>
                             <option value="intermediate">Intermediate</option>
                             <option value="expert">Expert</option>
@@ -330,7 +391,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
                 <button type="submit" disabled={isSubmitting} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-slate-500">
                     {isSubmitting ? 'Submitting...' : 'Add Question'}
                 </button>
-                {adminMessage && <p className="text-center text-sm text-yellow-300 mt-2">{adminMessage}</p>}
+                {adminMessage.text && <p className={`text-center text-sm mt-2 ${adminMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>{adminMessage.text}</p>}
             </form>
 
             <div className="mt-8 pt-4 border-t border-slate-700 text-center">
@@ -345,7 +406,7 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
 
 
 // --- Components ---
-const TrackSelection = ({ onStartTest, isAdmin, onSeedDatabase, seeding, seeded }) => {
+const TrackSelection = ({ onStartTest }) => {
     const tracks = [
         { id: 'javascript', name: 'JavaScript', color: 'bg-yellow-500', hover: 'hover:bg-yellow-600' },
         { id: 'python', name: 'Python', color: 'bg-blue-500', hover: 'hover:bg-blue-600' },
@@ -358,39 +419,36 @@ const TrackSelection = ({ onStartTest, isAdmin, onSeedDatabase, seeding, seeded 
     const [selectedTrack, setSelectedTrack] = useState(null);
 
     return (
-        <>
-            <div className="w-full max-w-4xl mx-auto p-4 md:p-8">
-                <div className="text-center mb-8">
-                    <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">Technical Skills Index</h1>
-                    <p className="text-slate-400 text-lg">Choose your track and level to start the assessment.</p>
-                </div>
-
-                <div className="bg-slate-800 p-6 rounded-xl shadow-2xl">
-                    <h2 className="text-2xl font-semibold text-white mb-6 border-b border-slate-700 pb-4">1. Select a Track</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {tracks.map(track => (
-                            <button key={track.id} onClick={() => setSelectedTrack(track.id)} className={`p-6 rounded-lg text-white font-bold text-xl transition-all duration-300 transform ${track.color} ${selectedTrack === track.id ? 'ring-4 ring-offset-2 ring-offset-slate-800 ring-white scale-105' : track.hover + ' hover:scale-105'}`}>
-                                {track.name}
-                            </button>
-                        ))}
-                    </div>
-
-                    {selectedTrack && (
-                        <div className="mt-8 pt-6 border-t border-slate-700">
-                            <h2 className="text-2xl font-semibold text-white mb-6">2. Select a Level</h2>
-                            <div className="flex flex-col md:flex-row justify-center gap-4">
-                                {levels.map(level => (
-                                    <button key={level} onClick={() => onStartTest(selectedTrack, level)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-8 rounded-lg transition-transform duration-200 hover:scale-105 shadow-lg w-full md:w-auto">
-                                        {level}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
+        <div className="w-full max-w-4xl mx-auto p-4 md:p-8">
+            <div className="text-center mb-8">
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">Technical Skills Index</h1>
+                <p className="text-slate-400 text-lg">Choose your track and level to start the assessment.</p>
             </div>
-            {isAdmin && <AdminPanel onSeedDatabase={onSeedDatabase} seeding={seeding} seeded={seeded} />}
-        </>
+
+            <div className="bg-slate-800 p-6 rounded-xl shadow-2xl">
+                <h2 className="text-2xl font-semibold text-white mb-6 border-b border-slate-700 pb-4">1. Select a Track</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {tracks.map(track => (
+                        <button key={track.id} onClick={() => setSelectedTrack(track.id)} className={`p-6 rounded-lg text-white font-bold text-xl transition-all duration-300 transform ${track.color} ${selectedTrack === track.id ? 'ring-4 ring-offset-2 ring-offset-slate-800 ring-white scale-105' : track.hover + ' hover:scale-105'}`}>
+                            {track.name}
+                        </button>
+                    ))}
+                </div>
+
+                {selectedTrack && (
+                    <div className="mt-8 pt-6 border-t border-slate-700">
+                        <h2 className="text-2xl font-semibold text-white mb-6">2. Select a Level</h2>
+                        <div className="flex flex-col md:flex-row justify-center gap-4">
+                            {levels.map(level => (
+                                <button key={level} onClick={() => onStartTest(selectedTrack, level)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-8 rounded-lg transition-transform duration-200 hover:scale-105 shadow-lg w-full md:w-auto">
+                                    {level}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
     );
 };
 
@@ -684,6 +742,18 @@ const AppHeader = ({ user, onSignOut }) => (
     </header>
 );
 
+const AdminDashboard = ({ onSeedDatabase, seeding, seeded }) => {
+    return (
+        <div className="w-full max-w-4xl mx-auto">
+            <div className="text-center mb-8">
+                <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">Admin Dashboard</h1>
+                <p className="text-slate-400 text-lg">Manage quizzes and application data.</p>
+            </div>
+            <AdminPanel onSeedDatabase={onSeedDatabase} seeding={seeding} seeded={seeded} />
+        </div>
+    );
+};
+
 
 export default function App() {
     const [view, setView] = useState('home');
@@ -744,7 +814,7 @@ export default function App() {
         setQuizResult({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {} });
     };
     
-    const renderView = () => {
+    const renderUserView = () => {
         switch (view) {
             case 'test':
                 return <Quiz db={db} track={quizConfig.track} level={quizConfig.level} onFinish={handleFinishTest} />;
@@ -752,7 +822,7 @@ export default function App() {
                 return <Results db={db} userId={user.uid} track={quizConfig.track} level={quizConfig.level} {...quizResult} onRestart={handleRestart} />;
             case 'home':
             default:
-                return <TrackSelection onStartTest={handleStartTest} isAdmin={isAdmin} onSeedDatabase={handleSeedDatabase} seeding={seeding} seeded={seeded} />;
+                return <TrackSelection onStartTest={handleStartTest} />;
         }
     };
 
@@ -770,7 +840,11 @@ export default function App() {
                     <main className="flex items-center justify-center p-4">
                         <style>{`.prose-invert { --tw-prose-body: #d1d5db; --tw-prose-headings: #fff; --tw-prose-lead: #a1a1aa; --tw-prose-links: #fff; --tw-prose-bold: #fff; --tw-prose-counters: #a1a1aa; --tw-prose-bullets: #a1a1aa; --tw-prose-hr: #404040; --tw-prose-quotes: #f3f4f6; --tw-prose-quote-borders: #404040; --tw-prose-captions: #a1a1aa; --tw-prose-code: #fff; --tw-prose-pre-code: #d1d5db; --tw-prose-pre-bg: #1f2937; --tw-prose-th-borders: #404040; --tw-prose-td-borders: #374151; }`}</style>
                         <div className="w-full">
-                            {renderView()}
+                           {isAdmin ? (
+                                <AdminDashboard onSeedDatabase={handleSeedDatabase} seeding={seeding} seeded={seeded} />
+                           ) : (
+                                renderUserView()
+                           )}
                         </div>
                     </main>
                 </>
