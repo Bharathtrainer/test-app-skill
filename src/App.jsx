@@ -296,7 +296,7 @@ const Quiz = ({ db, track, level, onFinish }) => {
     const [selectedAnswers, setSelectedAnswers] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [feedback, setFeedback] = useState(null);
+    const [timeoutId, setTimeoutId] = useState(null);
     const [totalTime, setTotalTime] = useState(TOTAL_QUIZ_TIME);
     const [questionTime, setQuestionTime] = useState(TIME_PER_QUESTION);
 
@@ -307,20 +307,26 @@ const Quiz = ({ db, track, level, onFinish }) => {
                 score++;
             }
         }
-        onFinish(score, questions.length);
+        onFinish(score, questions.length, questions, selectedAnswers);
     }, [questions, selectedAnswers, onFinish]);
 
     const handleNext = useCallback(() => {
-        setFeedback(null);
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            setTimeoutId(null);
+        }
+
         if (currentQuestionIndex < questions.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
             setQuestionTime(TIME_PER_QUESTION);
         } else {
             handleFinishQuiz();
         }
-    }, [currentQuestionIndex, questions.length, handleFinishQuiz]);
+    }, [currentQuestionIndex, questions.length, handleFinishQuiz, timeoutId]);
 
     useEffect(() => {
+        if(questions.length === 0) return; // Don't start timers until questions are loaded
+
         const timer = setInterval(() => {
             setTotalTime(prev => {
                 if (prev <= 1) {
@@ -341,7 +347,7 @@ const Quiz = ({ db, track, level, onFinish }) => {
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [handleFinishQuiz, handleNext]);
+    }, [handleFinishQuiz, handleNext, questions]);
 
     useEffect(() => {
         const fetchQuestions = async () => {
@@ -366,13 +372,14 @@ const Quiz = ({ db, track, level, onFinish }) => {
     }, [db, track, level]);
 
     const handleAnswerSelect = (option) => {
+        if (selectedAnswers[currentQuestionIndex]) return;
+
         setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
-        const isCorrect = option === questions[currentQuestionIndex].correctAnswer;
-        setFeedback({ correct: isCorrect, correctAnswer: questions[currentQuestionIndex].correctAnswer });
-        // Move to next question after a short delay to show feedback
-        setTimeout(() => {
+        
+        const id = setTimeout(() => {
             handleNext();
         }, 1200);
+        setTimeoutId(id);
     };
 
     if (isLoading) {
@@ -417,31 +424,20 @@ const Quiz = ({ db, track, level, onFinish }) => {
                     {currentQuestion.options.map((option, index) => {
                         const isSelected = selectedAnswers[currentQuestionIndex] === option;
                         let buttonClass = "bg-slate-700 hover:bg-slate-600";
-                        if (feedback && option === currentQuestion.correctAnswer) {
-                            buttonClass = "bg-green-700";
-                        } else if (feedback && isSelected && option !== currentQuestion.correctAnswer) {
-                            buttonClass = "bg-red-700";
-                        } else if (isSelected) {
+                        if (isSelected) {
                             buttonClass = "bg-indigo-600";
                         }
 
                         return (
-                            <button key={index} onClick={() => handleAnswerSelect(option)} disabled={!!feedback} className={`w-full text-left p-4 rounded-lg text-white font-medium transition-colors duration-200 text-lg ${buttonClass} disabled:cursor-not-allowed`}>
+                            <button key={index} onClick={() => handleAnswerSelect(option)} disabled={selectedAnswers[currentQuestionIndex]} className={`w-full text-left p-4 rounded-lg text-white font-medium transition-colors duration-200 text-lg ${buttonClass} disabled:cursor-not-allowed`}>
                                 {option}
                             </button>
                         );
                     })}
                 </div>
                 
-                {feedback && (
-                    <div className={`mt-6 p-4 rounded-lg flex items-center gap-3 ${feedback.correct ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                        {feedback.correct ? <CheckCircleIcon className="h-6 w-6" /> : <XCircleIcon className="h-6 w-6" />}
-                        <p className="font-semibold">{feedback.correct ? 'Correct!' : `Incorrect. The right answer is: ${feedback.correctAnswer}`}</p>
-                    </div>
-                )}
-
                 <div className="mt-8 text-right">
-                    <button onClick={handleNext} disabled={!!feedback} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
+                    <button onClick={handleNext} disabled={!selectedAnswers[currentQuestionIndex]} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                         {currentQuestionIndex < questions.length - 1 ? 'Next' : 'Finish'}
                     </button>
                 </div>
@@ -450,34 +446,23 @@ const Quiz = ({ db, track, level, onFinish }) => {
     );
 };
 
-const Results = ({ db, userId, track, level, score, totalQuestions, onRestart }) => {
+const Results = ({ db, userId, track, level, score, totalQuestions, onRestart, questions, selectedAnswers }) => {
     const percentage = Math.round((score / totalQuestions) * 100);
     const [studyGuide, setStudyGuide] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationError, setGenerationError] = useState('');
+    const [showReview, setShowReview] = useState(false);
 
     useEffect(() => {
         const saveResult = async () => {
-            if (!userId) {
-                console.log("No user ID, skipping result save.");
-                return;
-            }
+            if (!userId) return;
             try {
                 const resultsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'progress');
-                await addDoc(resultsCollectionRef, {
-                    track,
-                    level,
-                    score,
-                    totalQuestions,
-                    percentage,
-                    completedAt: new Date(),
-                });
-                console.log("Result saved successfully!");
+                await addDoc(resultsCollectionRef, { track, level, score, totalQuestions, percentage, completedAt: new Date() });
             } catch (error) {
                 console.error("Error saving result: ", error);
             }
         };
-
         saveResult();
     }, [db, userId, track, level, score, totalQuestions, percentage]);
     
@@ -494,25 +479,15 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart })
             const apiKey = "";
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
             
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) {
-                throw new Error(`API request failed with status ${response.status}`);
-            }
-
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
             const result = await response.json();
             
-            if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
-                const text = result.candidates[0].content.parts[0].text;
-                setStudyGuide(text);
+            if (result.candidates?.[0]?.content?.parts?.[0]) {
+                setStudyGuide(result.candidates[0].content.parts[0].text);
             } else {
                 throw new Error("Invalid response structure from API.");
             }
-
         } catch (error) {
             console.error("Error generating study guide:", error);
             setGenerationError("Sorry, we couldn't generate the study guide at this time. Please try again later.");
@@ -550,50 +525,41 @@ const Results = ({ db, userId, track, level, score, totalQuestions, onRestart })
                 </div>
 
                 <div className="mt-8 space-y-4">
-                    <button
-                        onClick={handleGenerateStudyGuide}
-                        disabled={isGenerating}
-                        className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-slate-600 disabled:cursor-not-allowed"
-                    >
-                        {isGenerating ? (
-                            <>
-                                <div className="w-5 h-5 border-t-2 border-r-2 border-white rounded-full animate-spin"></div>
-                                <span>Generating...</span>
-                            </>
-                        ) : (
-                            <>
-                                <SparklesIcon className="w-6 h-6" />
-                                <span>Generate Study Guide</span>
-                            </>
-                        )}
+                    <button onClick={() => setShowReview(!showReview)} className="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">
+                        {showReview ? 'Hide Review' : 'Review Answers'}
                     </button>
-                    <button
-                        onClick={onRestart}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
-                    >
+                    <button onClick={handleGenerateStudyGuide} disabled={isGenerating} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:bg-slate-600 disabled:cursor-not-allowed">
+                        {isGenerating ? ( <><div className="w-5 h-5 border-t-2 border-r-2 border-white rounded-full animate-spin"></div><span>Generating...</span></> ) : ( <><SparklesIcon className="w-6 h-6" /><span>Generate Study Guide</span></> )}
+                    </button>
+                    <button onClick={onRestart} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors">
                         Back to Home
                     </button>
                 </div>
             </div>
 
-            {generationError && (
-                 <div className="mt-6 w-full max-w-2xl mx-auto p-4 bg-red-900/50 text-red-300 rounded-lg">
-                    <p>{generationError}</p>
+            {showReview && (
+                <div className="mt-6 w-full max-w-2xl mx-auto p-6 bg-slate-800 rounded-xl shadow-2xl text-left space-y-6">
+                    <h2 className="text-2xl font-bold text-white mb-4">Quiz Review</h2>
+                    {questions.map((q, index) => {
+                        const userAnswer = selectedAnswers[index];
+                        const isCorrect = userAnswer === q.correctAnswer;
+                        return (
+                            <div key={index} className={`p-4 rounded-lg ${isCorrect ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
+                                <p className="font-bold text-white mb-2">Q{index + 1}: {q.questionText}</p>
+                                <p className={`text-sm ${isCorrect ? 'text-green-300' : 'text-red-300'}`}>Your answer: <span className="font-semibold">{userAnswer || 'Not Answered'}</span></p>
+                                {!isCorrect && <p className="text-sm text-green-300">Correct answer: <span className="font-semibold">{q.correctAnswer}</span></p>}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
+            {generationError && ( <div className="mt-6 w-full max-w-2xl mx-auto p-4 bg-red-900/50 text-red-300 rounded-lg"><p>{generationError}</p></div> )}
             {studyGuide && (
                 <div className="mt-6 w-full max-w-2xl mx-auto p-6 bg-slate-800 rounded-xl shadow-2xl text-left">
                     <h2 className="text-2xl font-bold text-white mb-4">✨ Your Personalized Study Guide</h2>
-                    <div className="prose prose-invert prose-sm md:prose-base max-w-none text-slate-300 whitespace-pre-wrap font-mono">
-                        {studyGuide}
-                    </div>
-                     <button
-                        onClick={() => setStudyGuide('')}
-                        className="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-                    >
-                        Close Guide
-                    </button>
+                    <div className="prose prose-invert prose-sm md:prose-base max-w-none text-slate-300 whitespace-pre-wrap font-mono">{studyGuide}</div>
+                    <button onClick={() => setStudyGuide('')} className="mt-6 w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">Close Guide</button>
                 </div>
             )}
         </div>
@@ -606,10 +572,7 @@ const AppHeader = ({ user, onSignOut }) => (
             <h1 className="text-xl font-bold text-white">Skill Index</h1>
             <div className="flex items-center gap-4">
                 <span className="text-sm text-slate-300">{user.email}</span>
-                <button 
-                    onClick={onSignOut}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm"
-                >
+                <button onClick={onSignOut} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm">
                     Sign Out
                 </button>
             </div>
@@ -619,9 +582,9 @@ const AppHeader = ({ user, onSignOut }) => (
 
 
 export default function App() {
-    const [view, setView] = useState('home'); // 'home', 'test', 'results'
+    const [view, setView] = useState('home');
     const [quizConfig, setQuizConfig] = useState({ track: null, level: null });
-    const [quizResult, setQuizResult] = useState({ score: 0, totalQuestions: 0 });
+    const [quizResult, setQuizResult] = useState({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {} });
     const [user, setUser] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [seeding, setSeeding] = useState(false);
@@ -639,7 +602,7 @@ export default function App() {
 
     const handleSignOut = async () => {
         await signOut(auth);
-        setView('home'); // Reset view on sign out
+        setView('home');
     };
 
     const handleSeedDatabase = useCallback(async () => {
@@ -654,9 +617,7 @@ export default function App() {
             }
             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'quizzes', 'javascript_expert');
             const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                setSeeded(true);
-            }
+            if (docSnap.exists()) setSeeded(true);
         } catch (error) {
             console.error("Error seeding database: ", error);
         }
@@ -668,15 +629,15 @@ export default function App() {
         setView('test');
     };
 
-    const handleFinishTest = (score, totalQuestions) => {
-        setQuizResult({ score, totalQuestions });
+    const handleFinishTest = (score, totalQuestions, questions, selectedAnswers) => {
+        setQuizResult({ score, totalQuestions, questions, selectedAnswers });
         setView('results');
     };
 
     const handleRestart = () => {
         setView('home');
         setQuizConfig({ track: null, level: null });
-        setQuizResult({ score: 0, totalQuestions: 0 });
+        setQuizResult({ score: 0, totalQuestions: 0, questions: [], selectedAnswers: {} });
     };
     
     const renderView = () => {
@@ -684,7 +645,7 @@ export default function App() {
             case 'test':
                 return <Quiz db={db} track={quizConfig.track} level={quizConfig.level} onFinish={handleFinishTest} />;
             case 'results':
-                return <Results db={db} userId={user.uid} track={quizConfig.track} level={quizConfig.level} score={quizResult.score} totalQuestions={quizResult.totalQuestions} onRestart={handleRestart} />;
+                return <Results db={db} userId={user.uid} track={quizConfig.track} level={quizConfig.level} {...quizResult} onRestart={handleRestart} />;
             case 'home':
             default:
                 return <TrackSelection onStartTest={handleStartTest} isAdmin={isAdmin} onSeedDatabase={handleSeedDatabase} seeding={seeding} seeded={seeded} />;
