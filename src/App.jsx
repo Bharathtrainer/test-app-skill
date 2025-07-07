@@ -14,6 +14,10 @@ import { getAnalytics } from "firebase/analytics";
 // Replace this with the email address you want to be the admin
 const ADMIN_EMAIL = "admin@test.com";
 
+// --- NEW: Timer Configuration ---
+const TOTAL_QUIZ_TIME = 600; // 10 minutes in seconds
+const TIME_PER_QUESTION = 30; // 30 seconds per question
+
 
 // --- Helper: Icon Components ---
 const CheckCircleIcon = ({ className }) => (
@@ -54,87 +58,15 @@ const appId = firebaseConfig.appId;
 
 // --- Sample Quiz Data ---
 const sampleQuizzes = {
-    'javascript_beginner': {
-        questions: [
-            { questionText: 'What does "DOM" stand for?', options: ['Document Object Model', 'Data Object Model', 'Desktop Oriented Markup', 'Digital Ordinance Map'], correctAnswer: 'Document Object Model' },
-            { questionText: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const' },
-            { questionText: 'What is `typeof null`?', options: ['"null"', '"undefined"', '"object"', '"string"'], correctAnswer: '"object"' },
-            { questionText: 'Which method adds an element to the end of an array?', options: ['.push()', '.pop()', '.shift()', '.unshift()'], correctAnswer: '.push()' },
-            { questionText: 'How do you write a single-line comment in JavaScript?', options: ['// comment', '/* comment */', '<!-- comment -->', '# comment'], correctAnswer: '// comment' },
-        ]
-    },
-    'javascript_intermediate': {
-        questions: [
-            { questionText: 'What is the purpose of the `...` spread operator?', options: ['To comment out code', 'To expand an iterable into individual elements', 'To declare a private variable', 'To multiply numbers'], correctAnswer: 'To expand an iterable into individual elements' },
-            { questionText: 'Which method is used to create a new array with all elements that pass a test?', options: ['.forEach()', '.map()', '.filter()', '.reduce()'], correctAnswer: '.filter()' },
-            { questionText: 'What does `async/await` help with?', options: ['Styling components', 'Synchronous code execution', 'Handling Promises more cleanly', 'Creating loops'], correctAnswer: 'Handling Promises more cleanly' },
-            { questionText: 'What is object destructuring?', options: ['Deleting an object', 'A way to extract properties from an object into variables', 'Combining two objects', 'A type of error'], correctAnswer: 'A way to extract properties from an object into variables' },
-            { questionText: 'A Promise in JavaScript can be in one of how many states?', options: ['2 (Resolved, Rejected)', '3 (Pending, Fulfilled, Rejected)', '1 (Pending)', '4 (Pending, Fulfilled, Rejected, Canceled)'], correctAnswer: '3 (Pending, Fulfilled, Rejected)' },
-        ]
-    },
-    'javascript_expert': {
-        questions: [
-            { questionText: 'What is a closure in JavaScript?', options: ['A way to lock a variable', 'A function bundled with its lexical environment', 'A syntax error', 'An outdated event handler'], correctAnswer: 'A function bundled with its lexical environment' },
-            { questionText: 'What does the `this` keyword refer to in an arrow function?', options: ['The global object', 'The object that called the function', 'The enclosing lexical context\'s `this`', 'It is always `undefined`'], correctAnswer: 'The enclosing lexical context\'s `this`' },
-            { questionText: 'What is the main purpose of the Event Loop?', options: ['To execute code line by line', 'To handle errors', 'To process callbacks from the queue when the call stack is empty', 'To manage memory allocation'], correctAnswer: 'To process callbacks from the queue when the call stack is empty' },
-            { questionText: 'How does prototypal inheritance work?', options: ['Objects inherit directly from other classes', 'Objects inherit directly from other objects', 'It is a way to create private properties', 'It only applies to functions'], correctAnswer: 'Objects inherit directly from other objects' },
-            { questionText: 'What is the difference between `==` and `===`?', options: ['No difference, they are interchangeable', '`==` compares value, `===` compares value and type', '`===` compares value, `==` compares value and type', '`===` is for assignment, `==` is for comparison'], correctAnswer: '`==` compares value, `===` compares value and type' },
-        ]
-    },
-    'python_beginner': {
-        questions: [
-            { questionText: 'What is the correct file extension for Python files?', options: ['.pyth', '.pt', '.py', '.python'], correctAnswer: '.py' },
-            { questionText: 'How do you create a function in Python?', options: ['def myFunction():', 'function myFunction():', 'create myFunction():', 'function:myFunction()'], correctAnswer: 'def myFunction():' },
-            { questionText: 'Which data type is used to store a sequence of characters?', options: ['str', 'char', 'string', 'text'], correctAnswer: 'str' },
-            { questionText: 'What is the output of `print(2 ** 3)`?', options: ['6', '8', '9', '5'], correctAnswer: '8' },
-            { questionText: 'Which keyword is used to exit a loop?', options: ['exit', 'quit', 'break', 'stop'], correctAnswer: 'break' },
-        ]
-    },
-    'python_intermediate': {
-        questions: [
-            { questionText: 'What is a list comprehension?', options: ['A way to understand lists', 'A compact way to create lists', 'A type of list error', 'A function to measure list length'], correctAnswer: 'A compact way to create lists' },
-            { questionText: 'What does a decorator do in Python?', options: ['Adds styling to output', 'A function that modifies another function', 'Deletes a function', 'A type of variable'], correctAnswer: 'A function that modifies another function' },
-            { questionText: 'What is the purpose of the `self` keyword in a class method?', options: ['It refers to the parent class', 'It is a global variable', 'It refers to the instance of the class', 'It is optional and has no purpose'], correctAnswer: 'It refers to the instance of the class' },
-            { questionText: 'How do you open a file named "data.txt" for writing in Python?', options: ['open("data.txt", "r")', 'open("data.txt")', 'open("data.txt", "w")', 'open.file("data.txt", "w")'], correctAnswer: 'open("data.txt", "w")' },
-            { questionText: 'What is a lambda function?', options: ['A multi-line function', 'A named function', 'A small anonymous function', 'A function that can only be used once'], correctAnswer: 'A small anonymous function' },
-        ]
-    },
-    'python_expert': {
-        questions: [
-            { questionText: 'What is the primary use of the `yield` keyword?', options: ['To end a function', 'To create a generator', 'To return multiple values at once', 'To declare a global variable'], correctAnswer: 'To create a generator' },
-            { questionText: 'What are `*args` and `**kwargs` used for in function definitions?', options: ['For pointer arithmetic', 'To pass a variable number of arguments', 'To define required arguments', 'To import modules'], correctAnswer: 'To pass a variable number of arguments' },
-            { questionText: 'What is a metaclass in Python?', options: ['A class for storing metadata', 'A class that is an instance of another class', 'A class that creates classes', 'A function that behaves like a class'], correctAnswer: 'A class that creates classes' },
-            { questionText: 'What is the Global Interpreter Lock (GIL) in CPython?', options: ['A security feature', 'A mutex that allows only one thread to execute Python bytecode at a time', 'A tool for debugging', 'A way to lock global variables'], correctAnswer: 'A mutex that allows only one thread to execute Python bytecode at a time' },
-            { questionText: 'How do you create a context manager in Python?', options: ['Using a decorator', 'Using the `with` statement and a class with `__enter__` and `__exit__` methods', 'Using a lambda function', 'It is a built-in data type'], correctAnswer: 'Using the `with` statement and a class with `__enter__` and `__exit__` methods' },
-        ]
-    },
-    'sql_beginner': {
-        questions: [
-            { questionText: 'What does SQL stand for?', options: ['Structured Query Language', 'Strong Question Language', 'Simple Query Lexicon', 'Scripted Query Language'], correctAnswer: 'Structured Query Language' },
-            { questionText: 'Which SQL statement is used to extract data from a database?', options: ['GET', 'OPEN', 'EXTRACT', 'SELECT'], correctAnswer: 'SELECT' },
-            { questionText: 'Which SQL clause is used to filter records?', options: ['FILTER BY', 'WHERE', 'SEARCH', 'CONDITION'], correctAnswer: 'WHERE' },
-            { questionText: 'Which SQL keyword is used to sort the result-set?', options: ['SORT BY', 'ORDER BY', 'ARRANGE', 'SORT'], correctAnswer: 'ORDER BY' },
-            { questionText: 'How can you insert a new record into the "Customers" table?', options: ['ADD INTO Customers...', 'INSERT INTO Customers...', 'NEW Customers...', 'INSERT Customers...'], correctAnswer: 'INSERT INTO Customers...' },
-        ]
-    },
-    'sql_intermediate': {
-        questions: [
-            { questionText: 'Which type of JOIN returns all records from the left table, and the matched records from the right table?', options: ['INNER JOIN', 'RIGHT JOIN', 'FULL JOIN', 'LEFT JOIN'], correctAnswer: 'LEFT JOIN' },
-            { questionText: 'What is the purpose of the `GROUP BY` clause?', options: ['To sort the result set', 'To group rows that have the same values into summary rows', 'To filter records', 'To join tables'], correctAnswer: 'To group rows that have the same values into summary rows' },
-            { questionText: 'Which aggregate function returns the number of rows?', options: ['SUM()', 'AVG()', 'COUNT()', 'MAX()'], correctAnswer: 'COUNT()' },
-            { questionText: 'What is a subquery?', options: ['A query that is nested inside another query', 'A query that cannot be executed', 'An outdated query format', 'A query to create a table'], correctAnswer: 'A query that is nested inside another query' },
-            { questionText: 'The `HAVING` clause was added to SQL because the `WHERE` keyword could not be used with what?', options: ['Functions', 'Subqueries', 'Aggregate functions', 'JOINs'], correctAnswer: 'Aggregate functions' },
-        ]
-    },
-    'sql_expert': {
-        questions: [
-            { questionText: 'What is a Common Table Expression (CTE)?', options: ['A temporary named result set that you can reference within another SQL statement', 'A permanent table', 'A type of index', 'A security feature'], correctAnswer: 'A temporary named result set that you can reference within another SQL statement' },
-            { questionText: 'What is the purpose of a window function like `ROW_NUMBER()`?', options: ['To calculate a running total', 'To assign a unique integer to each row within a partition of a result set', 'To find the average value', 'To join two tables'], correctAnswer: 'To assign a unique integer to each row within a partition of a result set' },
-            { questionText: 'What does a `TRANSACTION` ensure in a database?', options: ['Faster queries', 'That a group of SQL statements execute as a single, atomic unit', 'Better security', 'Automatic backups'], correctAnswer: 'That a group of SQL statements execute as a single, atomic unit' },
-            { questionText: 'What is the primary purpose of creating an index on a table?', options: ['To enforce uniqueness', 'To speed up the performance of queries', 'To store data in a sorted order', 'To make the table read-only'], correctAnswer: 'To speed up the performance of queries' },
-            { questionText: 'Which statement is used to combine the result-sets of two or more SELECT statements?', options: ['COMBINE', 'MERGE', 'UNION', 'JOIN'], correctAnswer: 'UNION' },
-        ]
-    }
+    'javascript_beginner': { questions: [ { questionText: 'What does "DOM" stand for?', options: ['Document Object Model', 'Data Object Model', 'Desktop Oriented Markup', 'Digital Ordinance Map'], correctAnswer: 'Document Object Model' }, { questionText: 'Which keyword is used to declare a variable that cannot be reassigned?', options: ['let', 'var', 'const', 'static'], correctAnswer: 'const' }, { questionText: 'What is `typeof null`?', options: ['"null"', '"undefined"', '"object"', '"string"'], correctAnswer: '"object"' }, { questionText: 'Which method adds an element to the end of an array?', options: ['.push()', '.pop()', '.shift()', '.unshift()'], correctAnswer: '.push()' }, { questionText: 'How do you write a single-line comment in JavaScript?', options: ['// comment', '/* comment */', '<!-- comment -->', '# comment'], correctAnswer: '// comment' }, ] },
+    'javascript_intermediate': { questions: [ { questionText: 'What is the purpose of the `...` spread operator?', options: ['To comment out code', 'To expand an iterable into individual elements', 'To declare a private variable', 'To multiply numbers'], correctAnswer: 'To expand an iterable into individual elements' }, { questionText: 'Which method is used to create a new array with all elements that pass a test?', options: ['.forEach()', '.map()', '.filter()', '.reduce()'], correctAnswer: '.filter()' }, { questionText: 'What does `async/await` help with?', options: ['Styling components', 'Synchronous code execution', 'Handling Promises more cleanly', 'Creating loops'], correctAnswer: 'Handling Promises more cleanly' }, { questionText: 'What is object destructuring?', options: ['Deleting an object', 'A way to extract properties from an object into variables', 'Combining two objects', 'A type of error'], correctAnswer: 'A way to extract properties from an object into variables' }, { questionText: 'A Promise in JavaScript can be in one of how many states?', options: ['2 (Resolved, Rejected)', '3 (Pending, Fulfilled, Rejected)', '1 (Pending)', '4 (Pending, Fulfilled, Rejected, Canceled)'], correctAnswer: '3 (Pending, Fulfilled, Rejected)' }, ] },
+    'javascript_expert': { questions: [ { questionText: 'What is a closure in JavaScript?', options: ['A way to lock a variable', 'A function bundled with its lexical environment', 'A syntax error', 'An outdated event handler'], correctAnswer: 'A function bundled with its lexical environment' }, { questionText: 'What does the `this` keyword refer to in an arrow function?', options: ['The global object', 'The object that called the function', 'The enclosing lexical context\'s `this`', 'It is always `undefined`'], correctAnswer: 'The enclosing lexical context\'s `this`' }, { questionText: 'What is the main purpose of the Event Loop?', options: ['To execute code line by line', 'To handle errors', 'To process callbacks from the queue when the call stack is empty', 'To manage memory allocation'], correctAnswer: 'To process callbacks from the queue when the call stack is empty' }, { questionText: 'How does prototypal inheritance work?', options: ['Objects inherit directly from other classes', 'Objects inherit directly from other objects', 'It is a way to create private properties', 'It only applies to functions'], correctAnswer: 'Objects inherit directly from other objects' }, { questionText: 'What is the difference between `==` and `===`?', options: ['No difference, they are interchangeable', '`==` compares value, `===` compares value and type', '`===` compares value, `==` compares value and type', '`===` is for assignment, `==` is for comparison'], correctAnswer: '`==` compares value, `===` compares value and type' }, ] },
+    'python_beginner': { questions: [ { questionText: 'What is the correct file extension for Python files?', options: ['.pyth', '.pt', '.py', '.python'], correctAnswer: '.py' }, { questionText: 'How do you create a function in Python?', options: ['def myFunction():', 'function myFunction():', 'create myFunction():', 'function:myFunction()'], correctAnswer: 'def myFunction():' }, { questionText: 'Which data type is used to store a sequence of characters?', options: ['str', 'char', 'string', 'text'], correctAnswer: 'str' }, { questionText: 'What is the output of `print(2 ** 3)`?', options: ['6', '8', '9', '5'], correctAnswer: '8' }, { questionText: 'Which keyword is used to exit a loop?', options: ['exit', 'quit', 'break', 'stop'], correctAnswer: 'break' }, ] },
+    'python_intermediate': { questions: [ { questionText: 'What is a list comprehension?', options: ['A way to understand lists', 'A compact way to create lists', 'A type of list error', 'A function to measure list length'], correctAnswer: 'A compact way to create lists' }, { questionText: 'What does a decorator do in Python?', options: ['Adds styling to output', 'A function that modifies another function', 'Deletes a function', 'A type of variable'], correctAnswer: 'A function that modifies another function' }, { questionText: 'What is the purpose of the `self` keyword in a class method?', options: ['It refers to the parent class', 'It is a global variable', 'It refers to the instance of the class', 'It is optional and has no purpose'], correctAnswer: 'It refers to the instance of the class' }, { questionText: 'How do you open a file named "data.txt" for writing in Python?', options: ['open("data.txt", "r")', 'open("data.txt")', 'open("data.txt", "w")', 'open.file("data.txt", "w")'], correctAnswer: 'open("data.txt", "w")' }, { questionText: 'What is a lambda function?', options: ['A multi-line function', 'A named function', 'A small anonymous function', 'A function that can only be used once'], correctAnswer: 'A small anonymous function' }, ] },
+    'python_expert': { questions: [ { questionText: 'What is the primary use of the `yield` keyword?', options: ['To end a function', 'To create a generator', 'To return multiple values at once', 'To declare a global variable'], correctAnswer: 'To create a generator' }, { questionText: 'What are `*args` and `**kwargs` used for in function definitions?', options: ['For pointer arithmetic', 'To pass a variable number of arguments', 'To define required arguments', 'To import modules'], correctAnswer: 'To pass a variable number of arguments' }, { questionText: 'What is a metaclass in Python?', options: ['A class for storing metadata', 'A class that is an instance of another class', 'A class that creates classes', 'A function that behaves like a class'], correctAnswer: 'A class that creates classes' }, { questionText: 'What is the Global Interpreter Lock (GIL) in CPython?', options: ['A security feature', 'A mutex that allows only one thread to execute Python bytecode at a time', 'A tool for debugging', 'A way to lock global variables'], correctAnswer: 'A mutex that allows only one thread to execute Python bytecode at a time' }, { questionText: 'How do you create a context manager in Python?', options: ['Using a decorator', 'Using the `with` statement and a class with `__enter__` and `__exit__` methods', 'Using a lambda function', 'It is a built-in data type'], correctAnswer: 'Using the `with` statement and a class with `__enter__` and `__exit__` methods' }, ] },
+    'sql_beginner': { questions: [ { questionText: 'What does SQL stand for?', options: ['Structured Query Language', 'Strong Question Language', 'Simple Query Lexicon', 'Scripted Query Language'], correctAnswer: 'Structured Query Language' }, { questionText: 'Which SQL statement is used to extract data from a database?', options: ['GET', 'OPEN', 'EXTRACT', 'SELECT'], correctAnswer: 'SELECT' }, { questionText: 'Which SQL clause is used to filter records?', options: ['FILTER BY', 'WHERE', 'SEARCH', 'CONDITION'], correctAnswer: 'WHERE' }, { questionText: 'Which SQL keyword is used to sort the result-set?', options: ['SORT BY', 'ORDER BY', 'ARRANGE', 'SORT'], correctAnswer: 'ORDER BY' }, { questionText: 'How can you insert a new record into the "Customers" table?', options: ['ADD INTO Customers...', 'INSERT INTO Customers...', 'NEW Customers...', 'INSERT Customers...'], correctAnswer: 'INSERT INTO Customers...' }, ] },
+    'sql_intermediate': { questions: [ { questionText: 'Which type of JOIN returns all records from the left table, and the matched records from the right table?', options: ['INNER JOIN', 'RIGHT JOIN', 'FULL JOIN', 'LEFT JOIN'], correctAnswer: 'LEFT JOIN' }, { questionText: 'What is the purpose of the `GROUP BY` clause?', options: ['To sort the result set', 'To group rows that have the same values into summary rows', 'To filter records', 'To join tables'], correctAnswer: 'To group rows that have the same values into summary rows' }, { questionText: 'Which aggregate function returns the number of rows?', options: ['SUM()', 'AVG()', 'COUNT()', 'MAX()'], correctAnswer: 'COUNT()' }, { questionText: 'What is a subquery?', options: ['A query that is nested inside another query', 'A query that cannot be executed', 'An outdated query format', 'A query to create a table'], correctAnswer: 'A query that is nested inside another query' }, { questionText: 'The `HAVING` clause was added to SQL because the `WHERE` keyword could not be used with what?', options: ['Functions', 'Subqueries', 'Aggregate functions', 'JOINs'], correctAnswer: 'Aggregate functions' }, ] },
+    'sql_expert': { questions: [ { questionText: 'What is a Common Table Expression (CTE)?', options: ['A temporary named result set that you can reference within another SQL statement', 'A permanent table', 'A type of index', 'A security feature'], correctAnswer: 'A temporary named result set that you can reference within another SQL statement' }, { questionText: 'What is the purpose of a window function like `ROW_NUMBER()`?', options: ['To calculate a running total', 'To assign a unique integer to each row within a partition of a result set', 'To find the average value', 'To join two tables'], correctAnswer: 'To assign a unique integer to each row within a partition of a result set' }, { questionText: 'What does a `TRANSACTION` ensure in a database?', options: ['Faster queries', 'That a group of SQL statements execute as a single, atomic unit', 'Better security', 'Automatic backups'], correctAnswer: 'That a group of SQL statements execute as a single, atomic unit' }, { questionText: 'What is the primary purpose of creating an index on a table?', options: ['To enforce uniqueness', 'To speed up the performance of queries', 'To store data in a sorted order', 'To make the table read-only'], correctAnswer: 'To speed up the performance of queries' }, { questionText: 'Which statement is used to combine the result-sets of two or more SELECT statements?', options: ['COMBINE', 'MERGE', 'UNION', 'JOIN'], correctAnswer: 'UNION' }, ] }
 };
 
 // --- Auth Component ---
@@ -200,7 +132,7 @@ const AuthScreen = () => {
     );
 };
 
-// --- NEW Admin Panel Component ---
+// --- Admin Panel Component ---
 const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
     const [track, setTrack] = useState('javascript');
     const [level, setLevel] = useState('beginner');
@@ -241,7 +173,6 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
             await setDoc(docRef, { questions: updatedQuestions });
 
             setAdminMessage(`Successfully added question to ${track} - ${level}!`);
-            // Reset form
             setQuestionText('');
             setOptions(['', '', '', '']);
             setCorrectAnswer('');
@@ -258,7 +189,6 @@ const AdminPanel = ({ onSeedDatabase, seeding, seeded }) => {
         <div className="w-full max-w-4xl mx-auto p-4 my-8 bg-slate-800 rounded-xl shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Admin Panel</h2>
             
-            {/* Create Quiz Form */}
             <form onSubmit={handleCreateQuiz} className="space-y-4 text-white">
                 <h3 className="text-xl font-semibold">Create New Quiz Question</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -367,6 +297,51 @@ const Quiz = ({ db, track, level, onFinish }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [feedback, setFeedback] = useState(null);
+    const [totalTime, setTotalTime] = useState(TOTAL_QUIZ_TIME);
+    const [questionTime, setQuestionTime] = useState(TIME_PER_QUESTION);
+
+    const handleFinishQuiz = useCallback(() => {
+        let score = 0;
+        for (let i = 0; i < questions.length; i++) {
+            if (selectedAnswers[i] === questions[i].correctAnswer) {
+                score++;
+            }
+        }
+        onFinish(score, questions.length);
+    }, [questions, selectedAnswers, onFinish]);
+
+    const handleNext = useCallback(() => {
+        setFeedback(null);
+        if (currentQuestionIndex < questions.length - 1) {
+            setCurrentQuestionIndex(prev => prev + 1);
+            setQuestionTime(TIME_PER_QUESTION);
+        } else {
+            handleFinishQuiz();
+        }
+    }, [currentQuestionIndex, questions.length, handleFinishQuiz]);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setTotalTime(prev => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    handleFinishQuiz();
+                    return 0;
+                }
+                return prev - 1;
+            });
+
+            setQuestionTime(prev => {
+                if (prev <= 1) {
+                    handleNext();
+                    return TIME_PER_QUESTION;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [handleFinishQuiz, handleNext]);
 
     useEffect(() => {
         const fetchQuestions = async () => {
@@ -394,21 +369,10 @@ const Quiz = ({ db, track, level, onFinish }) => {
         setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
         const isCorrect = option === questions[currentQuestionIndex].correctAnswer;
         setFeedback({ correct: isCorrect, correctAnswer: questions[currentQuestionIndex].correctAnswer });
-    };
-
-    const handleNext = () => {
-        setFeedback(null);
-        if (currentQuestionIndex < questions.length - 1) {
-            setCurrentQuestionIndex(prev => prev + 1);
-        } else {
-            let score = 0;
-            for (let i = 0; i < questions.length; i++) {
-                if (selectedAnswers[i] === questions[i].correctAnswer) {
-                    score++;
-                }
-            }
-            onFinish(score, questions.length);
-        }
+        // Move to next question after a short delay to show feedback
+        setTimeout(() => {
+            handleNext();
+        }, 1200);
     };
 
     if (isLoading) {
@@ -430,6 +394,14 @@ const Quiz = ({ db, track, level, onFinish }) => {
         <div className="w-full max-w-2xl mx-auto p-4 md:p-8">
             <div className="bg-slate-800 p-6 md:p-8 rounded-xl shadow-2xl">
                 <div className="mb-6">
+                     <div className="flex justify-between items-center mb-4 text-slate-300">
+                        <div className="text-lg">
+                            Total Time: <span className="font-bold text-white">{Math.floor(totalTime / 60)}:{('0' + totalTime % 60).slice(-2)}</span>
+                        </div>
+                         <div className="text-lg">
+                            Question Time: <span className="font-bold text-white">{questionTime}s</span>
+                        </div>
+                    </div>
                     <div className="flex justify-between items-center mb-2 text-slate-400">
                         <p>Question {currentQuestionIndex + 1} of {questions.length}</p>
                         <p className="font-semibold capitalize">{track} - {level}</p>
@@ -454,12 +426,7 @@ const Quiz = ({ db, track, level, onFinish }) => {
                         }
 
                         return (
-                            <button
-                                key={index}
-                                onClick={() => handleAnswerSelect(option)}
-                                disabled={!!feedback}
-                                className={`w-full text-left p-4 rounded-lg text-white font-medium transition-colors duration-200 text-lg ${buttonClass} disabled:cursor-not-allowed`}
-                            >
+                            <button key={index} onClick={() => handleAnswerSelect(option)} disabled={!!feedback} className={`w-full text-left p-4 rounded-lg text-white font-medium transition-colors duration-200 text-lg ${buttonClass} disabled:cursor-not-allowed`}>
                                 {option}
                             </button>
                         );
@@ -474,11 +441,7 @@ const Quiz = ({ db, track, level, onFinish }) => {
                 )}
 
                 <div className="mt-8 text-right">
-                    <button
-                        onClick={handleNext}
-                        disabled={!selectedAnswers[currentQuestionIndex]}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
-                    >
+                    <button onClick={handleNext} disabled={!!feedback} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed">
                         {currentQuestionIndex < questions.length - 1 ? 'Next' : 'Finish'}
                     </button>
                 </div>
